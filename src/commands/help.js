@@ -5,7 +5,7 @@ export const data = new SlashCommandBuilder()
   .setDescription("MetaCoin komut rehberi");
 
 export async function execute(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await interaction.deferReply({ ephemeral: true });
 
   const e = new EmbedBuilder()
     .setTitle("MetaCoin — Komutlar")
@@ -26,5 +26,5 @@ export async function execute(interaction) {
       "`/mc stats rich|level` (klasik), `/market leaderboard` (toplam varlık)"
     ].join("\n"));
 
-  await interaction.editReply({ embeds: [e] });
+  await interaction.editReply({ embeds: [embed] });
 }
