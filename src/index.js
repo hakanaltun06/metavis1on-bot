@@ -9,8 +9,16 @@ import {
   Routes
 } from "discord.js";
 
+// --- Komutlar (temel + ekonomi) ---
 import * as ping from "./commands/ping.js";
 import * as help from "./commands/help.js";
+import * as balance from "./commands/economy/balance.js";
+import * as daily from "./commands/economy/daily.js";
+import * as work from "./commands/economy/work.js";
+import * as mine from "./commands/economy/mine.js";
+import * as bet from "./commands/economy/bet.js";
+import * as give from "./commands/economy/give.js";
+import * as leaderboard from "./commands/economy/leaderboard.js";
 
 const {
   DISCORD_TOKEN,
@@ -19,15 +27,25 @@ const {
   PORT = 3000
 } = process.env;
 
-// --- Basit health endpoint (Render için) ---
+// --- Health check (Render için) ---
 const app = express();
 app.get("/", (_req, res) => res.send("OK"));
 app.listen(PORT, () => console.log("Health on", PORT));
 
 // --- Slash komutları listesi ---
-const commands = [ping.data.toJSON(), help.data.toJSON()];
+const commands = [
+  ping.data.toJSON(),
+  help.data.toJSON(),
+  balance.data.toJSON(),
+  daily.data.toJSON(),
+  work.data.toJSON(),
+  mine.data.toJSON(),
+  bet.data.toJSON(),
+  give.data.toJSON(),
+  leaderboard.data.toJSON()
+];
 
-// --- Komutlar Discord'a kaydediliyor ---
+// --- Komutları Discord'a kaydet ---
 async function registerCommands() {
   if (!CLIENT_ID) {
     console.warn("⚠️ CLIENT_ID boş: Komut kayıt atlanıyor.");
@@ -56,16 +74,22 @@ async function registerCommands() {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    // aşağıdakiler opsiyonel kullanımına göre:
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent
   ]
 });
 
-// Komut çalıştırma map'i
+// --- Komut koleksiyonu ---
 client.commands = new Collection();
 client.commands.set(ping.data.name, ping);
 client.commands.set(help.data.name, help);
+client.commands.set(balance.data.name, balance);
+client.commands.set(daily.data.name, daily);
+client.commands.set(work.data.name, work);
+client.commands.set(mine.data.name, mine);
+client.commands.set(bet.data.name, bet);
+client.commands.set(give.data.name, give);
+client.commands.set(leaderboard.data.name, leaderboard);
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`✅ Giriş yapıldı: ${c.user.tag}`);
@@ -80,7 +104,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await cmd.execute(interaction);
   } catch (err) {
     console.error(err);
-    const reply = { content: "Komutta hata oluştu.", ephemeral: true };
+    const reply = { content: "❌ Komut çalıştırılırken hata oluştu.", ephemeral: true };
     if (interaction.deferred || interaction.replied) {
       await interaction.followUp(reply);
     } else {
