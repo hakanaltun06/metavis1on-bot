@@ -1,8 +1,9 @@
 import "dotenv/config";
 import { REST, Routes } from "discord.js";
-import * as ping from "../commands/ping.js";
-import * as help from "../commands/help.js";
-import * as metacoin from "../commands/metacoin.js";
+import * as ping from "./commands/ping.js";
+import * as help from "./commands/help.js";
+import * as mc from "./commands/mc.js";
+import * as market from "./commands/market.js";
 
 const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID } = process.env;
 if (!DISCORD_TOKEN || !CLIENT_ID) {
@@ -11,7 +12,7 @@ if (!DISCORD_TOKEN || !CLIENT_ID) {
 }
 
 const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
-const commands = [ping.data.toJSON(), help.data.toJSON(), metacoin.data.toJSON()];
+const commands = [ping.data, help.data, mc.data, market.data].map(c => c.toJSON());
 
 try {
   if (GUILD_ID) {

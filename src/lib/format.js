@@ -1,4 +1,5 @@
-export const coin = (n) => `🪙 **${n.toLocaleString("tr-TR")}**`;
+export const coin = (n) => `🪙 **${Number(n).toLocaleString("tr-TR")}**`;
+export const num = (n) => Number(n).toLocaleString("tr-TR");
 export const msToText = (ms) => {
   const s = Math.ceil(ms / 1000);
   const m = Math.floor(s / 60);
