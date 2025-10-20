@@ -1,10 +1,13 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 
 export const data = new SlashCommandBuilder()
   .setName("help")
   .setDescription("MetaCoin komut rehberi");
 
 export async function execute(interaction) {
+  // Etkileşimi hemen ACK et (3sn sınırına takılma)
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
   const e = new EmbedBuilder()
     .setTitle("MetaCoin — Komutlar")
     .setDescription([
@@ -16,7 +19,10 @@ export async function execute(interaction) {
       "- `case`: list, info, open",
       "- `gamble`: coinflip, slots",
       "- `pet`: adopt, list, info, feed",
+      "- `stats`: rich, level",
     ].join("\n"))
     .setFooter({ text: "İpucu: Yeni başlayanlar için /mc daily ve /mc economy work!" });
-  await interaction.reply({ embeds: [e], ephemeral: true });
+
+  // Asıl cevabı düzenle
+  await interaction.editReply({ embeds: [e] });
 }

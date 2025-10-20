@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { Client, GatewayIntentBits, Collection, Events } from "discord.js";
+import { Client, GatewayIntentBits, Collection, Events, MessageFlags } from "discord.js";
 import * as ping from "../commands/ping.js";
 import * as help from "../commands/help.js";
 import * as metacoin from "../commands/metacoin.js";
@@ -52,12 +52,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await command.execute(interaction);
   } catch (err) {
     console.error("Komut hatası:", err);
-    if (interaction.deferred || interaction.replied) {
-      await interaction.followUp({ content: "❌ Komut çalışırken bir hata oluştu.", ephemeral: true });
-    } else {
-      await interaction.reply({ content: "❌ Komut çalışırken bir hata oluştu.", ephemeral: true });
+    if (err?.code === 10062) return;
+
+    try {
+      if (interaction.deferred) {
+        await interaction.editReply({ content: "❌ Komut çalışırken bir hata oluştu." });
+      } else if (!interaction.replied) {
+        await interaction.reply({ content: "❌ Komut çalışırken bir hata oluştu.", flags: MessageFlags.Ephemeral });
+      }
+    } catch (e2) {
+      // Burada da 10062 gelirse görmezden gel
+      if (e2?.code !== 10062) console.error("Hata yanıtı atılamadı:", e2);
     }
   }
 });
-
 client.login(DISCORD_TOKEN);
