@@ -1,11 +1,11 @@
 import "dotenv/config";
 import express from "express";
 import { Client, GatewayIntentBits, Collection, Events } from "discord.js";
-import * as ping from "./commands/ping.js";
-import * as help from "./commands/help.js";
-import * as metacoin from "./commands/metacoin.js";
-import { ensureDatabase } from "./lib/db.js";
-import { initCooldownSweeper } from "./lib/cooldown.js";
+import * as ping from "../commands/ping.js";
+import * as help from "../commands/help.js";
+import * as metacoin from "../commands/metacoin.js";
+import { ensureDatabase } from "../lib/db.js";
+import { initCooldownSweeper } from "../lib/cooldown.js";
 
 const {
   DISCORD_TOKEN,

@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { REST, Routes } from "discord.js";
-import * as ping from "./commands/ping.js";
-import * as help from "./commands/help.js";
-import * as metacoin from "./commands/metacoin.js";
+import * as ping from "../commands/ping.js";
+import * as help from "../commands/help.js";
+import * as metacoin from "../commands/metacoin.js";
 
 const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID } = process.env;
 if (!DISCORD_TOKEN || !CLIENT_ID) {
