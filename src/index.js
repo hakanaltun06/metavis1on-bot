@@ -1,54 +1,76 @@
 import "dotenv/config";
 import express from "express";
-import { Client, GatewayIntentBits, Collection, Events } from "discord.js";
-import * as ping from "./commands/ping.js";
-import * as help from "./commands/help.js";
-import * as mc from "./commands/mc.js";
-import { ensureDatabase } from "./lib/db.js";
-import { initCooldownSweeper } from "./lib/cooldown.js";
+import { Client, GatewayIntentBits, REST, Routes, Collection, Events } from "discord.js";
+import { allSlashCommandData, handleInteraction, COMMANDS_VERSION } from "./commands.js";
+import { ensureDatabase } from "./db.js";
 
-const { DISCORD_TOKEN, PORT = 3000 } = process.env;
-if (!DISCORD_TOKEN) {
-  console.error("❌ DISCORD_TOKEN eksik.");
+const {
+  DISCORD_TOKEN,
+  CLIENT_ID,
+  GUILD_ID,
+  PORT = 3000,
+  REGISTER_COMMANDS = "false"
+} = process.env;
+
+if (!DISCORD_TOKEN || !CLIENT_ID) {
+  console.error("HATA: DISCORD_TOKEN ve CLIENT_ID zorunludur. .env dosyanızı kontrol edin.");
   process.exit(1);
 }
 
-// Health endpoint (Render)
+// --- Express (Render health) ---
 const app = express();
-app.get("/", (_req, res) => res.send("MetaCoin OK"));
-app.listen(PORT, () => console.log(`🌐 Health port ${PORT}`));
+app.get("/", (_req, res) => res.status(200).send(`MetaCoin OK • v${COMMANDS_VERSION}`));
+app.listen(PORT, () => console.log(`[META] Health endpoint aktif :${PORT}`));
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-client.commands = new Collection();
-[ping, help, mc].forEach((cmd) => client.commands.set(cmd.data.name, cmd));
-
-await ensureDatabase();
-initCooldownSweeper();
-
-client.once(Events.ClientReady, (c) => {
-  console.log(`✅ Giriş yapıldı: ${c.user.tag}`);
+// --- Discord Client ---
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds]
 });
 
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  const command = client.commands.get(interaction.commandName);
-  if (!command) return;
+client.commands = new Collection();
+
+// Komutları kaydet
+async function registerSlash() {
+  const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
 
   try {
-    await command.execute(interaction);
+    if (GUILD_ID) {
+      // İsterseniz hızlı test için guild bazlı kayıt
+      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
+        body: allSlashCommandData
+      });
+      console.log(`[META] Guild(${GUILD_ID}) komutları kaydedildi. (${allSlashCommandData.length})`);
+    } else {
+      await rest.put(Routes.applicationCommands(CLIENT_ID), { body: allSlashCommandData });
+      console.log(`[META] Global komutlar kaydedildi. (${allSlashCommandData.length})`);
+      console.log("Global komutların görünmesi birkaç dakika sürebilir.");
+    }
   } catch (err) {
-    console.error("Komut hatası:", err);
-    // DiscordAPIError[10062]: Unknown interaction → süresi dolmuş; sessizce geç
-    if (err?.code === 10062) return;
-    try {
-      if (interaction.deferred) {
-        await interaction.editReply({ content: "❌ Komut çalışırken bir hata oluştu." });
-      } else if (!interaction.replied) {
-        // flags: 64 = ephemeral
-        await interaction.reply({ content: "❌ Komut çalışırken bir hata oluştu.", flags: 64 });
-      }
-    } catch (e2) {
-      if (e2?.code !== 10062) console.error("Hata yanıtı atılamadı:", e2);
+    console.error("[META] Komut kayıt hatası:", err);
+  }
+}
+
+// Bot hazır olduğunda
+client.once(Events.ClientReady, async (c) => {
+  console.log(`[META] ${c.user.tag} olarak giriş yapıldı.`);
+  ensureDatabase(); // tablo kurulumları
+
+  if (REGISTER_COMMANDS === "true") {
+    await registerSlash();
+  }
+});
+
+// Etkileşim yakalama
+client.on(Events.InteractionCreate, async (interaction) => {
+  try {
+    if (!interaction.isChatInputCommand()) return;
+    await handleInteraction(interaction);
+  } catch (err) {
+    console.error("[META] Interaction hatası:", err);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({ content: "Bir hata oluştu. Lütfen tekrar deneyin.", ephemeral: true }).catch(()=>{});
+    } else {
+      await interaction.reply({ content: "Bir hata oluştu. Lütfen tekrar deneyin.", ephemeral: true }).catch(()=>{});
     }
   }
 });
