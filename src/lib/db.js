@@ -344,4 +344,5 @@ export function analyzeCase(c) {
 }
 
 /* ---------- Market helpers (DB-level) ---------- */
-export function db() { return getDB(); }
+// en alt kısımda bu fonksiyon artık olmayacak
+// export function db() { return getDB(); } satırını kaldır
