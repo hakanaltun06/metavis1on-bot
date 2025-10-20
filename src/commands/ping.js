@@ -1,12 +1,14 @@
-import { SlashCommandBuilder, MessageFlags } from "discord.js";
+import { SlashCommandBuilder } from "discord.js";
 
 export const data = new SlashCommandBuilder()
   .setName("ping")
   .setDescription("Bot yanıt süresi");
 
 export async function execute(interaction) {
-  const t0 = Date.now();
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  // hızlı ACK (flags:64 = ephemeral)
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: 64 });
+  }
   const latency = Date.now() - interaction.createdTimestamp;
-  await interaction.editReply(`Pong! 🏓 ~${latency}ms (ack: ~${Date.now() - t0}ms)`);
+  await interaction.editReply(`Pong! 🏓 ~${latency}ms`);
 }

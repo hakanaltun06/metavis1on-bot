@@ -1,30 +1,31 @@
-import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
 
 export const data = new SlashCommandBuilder()
   .setName("help")
   .setDescription("MetaCoin komut rehberi");
 
 export async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: 64 }); // ephemeral
+  }
 
-  const e = new EmbedBuilder()
-    .setTitle("MetaCoin — Komutlar")
+  const embed = new EmbedBuilder()
+    .setTitle("💎 MetaCoin — Yardım")
     .setDescription([
       "### Ekonomi",
       "`/mc economy balance|daily|work|beg|transfer`",
-      "### Banka",
-      "`/mc bank deposit|withdraw|info` (faizli hesap)",
+      "### Banka (faizli)",
+      "`/mc bank deposit|withdraw|info`",
       "### Mağaza & Envanter",
       "`/mc shop list|buy|sell`, `/mc inv show`",
       "### Kasalar",
-      "`/mc case list|info|open` — **çok sayıda kasa**, EV/olasılık önizleme",
+      "`/mc case list|info|open|simulate` — **çok sayıda kasa**, EV/olasılık önizleme, simülasyon",
       "### Kumar",
       "`/mc gamble coinflip|slots`",
-      "### Borsa",
-      "`/market list|info|buy|sell|portfolio|leaderboard`",
       "### Sıralama",
-      "`/mc stats rich|level` (klasik), `/market leaderboard` (toplam varlık)"
-    ].join("\n"));
+      "`/mc stats rich|level`"
+    ].join("\n"))
+    .setFooter({ text: "İpucu: Kasa açmadan önce `/mc case info` ile EV'yi kontrol et." });
 
   await interaction.editReply({ embeds: [embed] });
 }

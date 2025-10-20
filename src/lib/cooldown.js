@@ -1,4 +1,5 @@
 const cd = new Map();
+
 export function canUse(userId, action, cooldownMs) {
   const k = `${userId}:${action}`;
   const now = Date.now();
@@ -7,6 +8,7 @@ export function canUse(userId, action, cooldownMs) {
   cd.set(k, now + cooldownMs);
   return { ok: true, remainMs: 0 };
 }
+
 export function initCooldownSweeper() {
   setInterval(() => {
     const now = Date.now();

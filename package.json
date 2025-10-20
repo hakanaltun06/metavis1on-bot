@@ -1,9 +1,7 @@
 {
-  "name": "metavis1on-bot",
-  "private": true,
+  "name": "metacoin-bot",
+  "version": "3.0.0",
   "type": "module",
-  "version": "1.0.0",
-  "description": "Metavis1on Discord Bot",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

@@ -1,9 +1,11 @@
 import Database from "better-sqlite3";
-import { analyzeCaseValue } from "./market.js"; // sadece sabitlere erişmeyeceğiz; ayrık
 
 const { DB_PATH = "./metacoin.db" } = process.env;
-let db;
-export function getDB() { if (!db) db = new Database(DB_PATH); return db; }
+let _db;
+export function getDB() {
+  if (!_db) _db = new Database(DB_PATH);
+  return _db;
+}
 
 export async function ensureDatabase() {
   const db = getDB();
@@ -51,39 +53,14 @@ export async function ensureDatabase() {
     );
   `);
 
-  // Sanal borsa tablolari
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS market_symbols (
-      symbol TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      price REAL NOT NULL,
-      drift REAL NOT NULL,
-      vol REAL NOT NULL,
-      seed INTEGER NOT NULL,
-      last_ts INTEGER NOT NULL
-    );
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS market_positions (
-      user_id TEXT NOT NULL,
-      symbol TEXT NOT NULL,
-      qty REAL NOT NULL DEFAULT 0,
-      avg_price REAL NOT NULL DEFAULT 0,
-      PRIMARY KEY (user_id, symbol),
-      FOREIGN KEY (symbol) REFERENCES market_symbols(symbol)
-    );
-  `);
-
   seedItems(db);
   seedCases(db);
-  seedSymbols(db);
 }
 
-/* ---------- Seeds ---------- */
-
+/* --------- Seeds --------- */
 function seedItems(db) {
   const items = [
-    { item_id: "cookie", name: "Kurabiye", type: "consumable", price: 50, description: "Pet'ine +5 XP (ileride)" },
+    { item_id: "cookie", name: "Kurabiye", type: "consumable", price: 50, description: "Bazı mini-bonuslar için" },
     { item_id: "gem", name: "Mavi Mücevher", type: "gem", price: 1200, description: "Nadir koleksiyon" },
     { item_id: "rod", name: "Olta", type: "tool", price: 300, description: "+%5 şans bonusu" },
     { item_id: "pickaxe", name: "Kazma", type: "tool", price: 650, description: "+%10 şans bonusu" },
@@ -97,14 +74,17 @@ function seedItems(db) {
     { item_id: "artifact", name: "Antik Eser", type: "relic", price: 20000, description: "Oldukça nadir" },
     { item_id: "ticket", name: "Jackpot Bileti", type: "ticket", price: 1000, description: "Koleksiyon" }
   ];
-  const stmt = db.prepare("INSERT OR IGNORE INTO items (item_id,name,type,price,description) VALUES (@item_id,@name,@type,@price,@description)");
-  const tx = db.transaction(rows => rows.forEach(r => stmt.run(r)));
+  const stmt = db.prepare(
+    "INSERT OR IGNORE INTO items (item_id,name,type,price,description) VALUES (@item_id,@name,@type,@price,@description)"
+  );
+  const tx = db.transaction((rows) => rows.forEach((r) => stmt.run(r)));
   tx(items);
 }
 
 function seedCases(db) {
   const cases = [
-    { case_id: "starter", name: "Başlangıç Kasası", price: 250, drops_json: JSON.stringify([
+    // giriş-orta-üst segment + "kâr şansı düşük" kasalar
+    { case_id: "starter", name: "Başlangıç", price: 250, drops_json: JSON.stringify([
       { item_id: "cookie", weight: 45, minQty: 1, maxQty: 3 },
       { item_id: "rod", weight: 10, minQty: 1, maxQty: 1 },
       { item_id: "gem", weight: 5, minQty: 1, maxQty: 1 }
@@ -188,32 +168,17 @@ function seedCases(db) {
     ])}
   ];
   const stmt = db.prepare("INSERT OR IGNORE INTO cases (case_id,name,price,drops_json) VALUES (@case_id,@name,@price,@drops_json)");
-  const tx = db.transaction(rows => rows.forEach(r => stmt.run(r)));
+  const tx = db.transaction((rows) => rows.forEach((r) => stmt.run(r)));
   tx(cases);
 }
 
-function seedSymbols(db) {
-  const now = Date.now();
-  const syms = [
-    { symbol: "META", name: "Meta Index", price: 100, drift: 0.05, vol: 0.35, seed: 12345, last_ts: now },
-    { symbol: "TECH", name: "Tech Basket", price: 75, drift: 0.03, vol: 0.30, seed: 23456, last_ts: now },
-    { symbol: "NANO", name: "Nano Corp", price: 20, drift: 0.02, vol: 0.55, seed: 34567, last_ts: now },
-    { symbol: "OIL",  name: "Oil Fund",  price: 50, drift: 0.01, vol: 0.25, seed: 45678, last_ts: now },
-    { symbol: "GOLD", name: "Gold Trust", price: 60, drift: 0.005, vol: 0.15, seed: 56789, last_ts: now },
-    { symbol: "RNG",  name: "RandomCo",   price: 10, drift: 0.00, vol: 0.80, seed: 67890, last_ts: now },
-    { symbol: "BOND", name: "Bond Fund",  price: 100, drift: 0.015, vol: 0.05, seed: 78901, last_ts: now },
-    { symbol: "SHIBA",name: "Shiba Meme", price: 1, drift: 0.10, vol: 1.20, seed: 89012, last_ts: now }
-  ];
-  const stmt = db.prepare("INSERT OR IGNORE INTO market_symbols (symbol,name,price,drift,vol,seed,last_ts) VALUES (@symbol,@name,@price,@drift,@vol,@seed,@last_ts)");
-  syms.forEach(s => stmt.run(s));
-}
-
-/* ---------- User ---------- */
+/* --------- User / Economy --------- */
 export function getOrCreateUser(user_id) {
   const db = getDB();
   const u = db.prepare("SELECT * FROM users WHERE user_id=?").get(user_id);
   if (u) return u;
-  db.prepare("INSERT INTO users (user_id,balance,bank,xp,level,interest_ts) VALUES (?,?, ?, ?, ?, ?)").run(user_id, 0, 0, 0, 1, Date.now());
+  db.prepare("INSERT INTO users (user_id,balance,bank,xp,level,interest_ts) VALUES (?,?,?,?,?,?)")
+    .run(user_id, 0, 0, 0, 1, Date.now());
   return db.prepare("SELECT * FROM users WHERE user_id=?").get(user_id);
 }
 export function getUser(user_id) { return getDB().prepare("SELECT * FROM users WHERE user_id=?").get(user_id); }
@@ -223,7 +188,8 @@ export function addBalance(user_id, amount) {
   return db.prepare("SELECT balance FROM users WHERE user_id=?").get(user_id).balance;
 }
 export function addXP(user_id, amount) {
-  const db = getDB(); const u = getOrCreateUser(user_id);
+  const db = getDB();
+  const u = getOrCreateUser(user_id);
   let xp = u.xp + amount, level = u.level;
   const need = (lv) => 100 + (lv - 1) * 50;
   while (xp >= need(level)) { xp -= need(level); level++; }
@@ -234,9 +200,9 @@ export function setUserTimestamp(user_id, field, ms) {
   getDB().prepare(`UPDATE users SET ${field}=? WHERE user_id=?`).run(ms, user_id);
 }
 
-/* ---------- Interest (Faiz) ---------- */
-// Saatlik bileşik faiz. İstersen oranı değiştirebilirsin.
-const HOURLY_INTEREST = 0.0002; // ~%0.02 saatlik ≈ %0.48 günlük (yaklaşık)
+/* --------- Interest (Faiz) --------- */
+// saatlik bileşik faiz (temkinli)
+const HOURLY_INTEREST = 0.0002; // ~%0.02 / saat ≈ %0.48 / gün
 export function applyAccruedInterest(user_id) {
   const db = getDB();
   const u = db.prepare("SELECT bank, interest_ts FROM users WHERE user_id=?").get(user_id);
@@ -244,7 +210,7 @@ export function applyAccruedInterest(user_id) {
   const now = Date.now();
   const last = u.interest_ts ?? now;
   const hours = Math.max(0, (now - last) / (1000 * 60 * 60));
-  if (hours < 0.01) return; // ~1dk altında es geç
+  if (hours < 0.01) return;
   const factor = Math.pow(1 + HOURLY_INTEREST, hours);
   const newBank = Math.floor(u.bank * factor);
   db.prepare("UPDATE users SET bank=?, interest_ts=? WHERE user_id=?").run(newBank, now, user_id);
@@ -281,7 +247,7 @@ export function transferBalance(from, to, amount) {
   tx(from, to, amount);
 }
 
-/* ---------- Inventory & Shop ---------- */
+/* --------- Inventory & Shop --------- */
 export function addItem(user_id, item_id, qty) {
   const db = getDB();
   const up = db.prepare("UPDATE inventory SET qty = qty + ? WHERE user_id=? AND item_id=?");
@@ -299,7 +265,7 @@ export function getInventory(user_id) {
 export function listShop() { return getDB().prepare("SELECT * FROM items ORDER BY price ASC").all(); }
 export function getItemById(id) { return getDB().prepare("SELECT * FROM items WHERE item_id=?").get(id); }
 
-/* ---------- Cases ---------- */
+/* --------- Cases --------- */
 export function listCases() { return getDB().prepare("SELECT * FROM cases ORDER BY price ASC").all(); }
 export function getCase(id) { return getDB().prepare("SELECT * FROM cases WHERE case_id=?").get(id); }
 export function buyCase(user_id, id) {
@@ -342,7 +308,3 @@ export function analyzeCase(c) {
   const ev = rows.reduce((s, r) => s + r.p * r.v.avg, 0);
   return { rows, ev };
 }
-
-/* ---------- Market helpers (DB-level) ---------- */
-// en alt kısımda bu fonksiyon artık olmayacak
-// export function db() { return getDB(); } satırını kaldır
