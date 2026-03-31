@@ -177,6 +177,10 @@ class StorageManager {
     async getInventory(id) { return this.provider === "firestore" ? FirestoreImpl.getInventory(id) : JsonImpl.getInventory(id); }
     async saveInventory(id, inv) { return this.provider === "firestore" ? FirestoreImpl.saveInventory(id, inv) : JsonImpl.saveInventory(id, inv); }
     async addTransaction(id, tx) { tx.id = generateId(); tx.timestamp = nowSec(); return this.provider === "firestore" ? FirestoreImpl.addTransaction(id, tx) : JsonImpl.addTransaction(id, tx); }
+    
+    // EKSİK OLAN VE EKLENEN SATIR BURASI:
+    async getCollection(id, col) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, col) : JsonImpl.getCollection(id, col); }
+    
     async getLoans(id) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, "loans") : JsonImpl.getCollection(id, "loans"); }
     async saveLoan(id, loan) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, "loans", loan.id, loan) : JsonImpl.saveDocument(id, "loans", loan.id, loan); }
     async getInvestments(id) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, "investments") : JsonImpl.getCollection(id, "investments"); }
