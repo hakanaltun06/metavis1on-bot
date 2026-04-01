@@ -1430,13 +1430,9 @@ async function replySafe(interaction, payload) {
             await interaction.reply(payload);
         }
     } catch (e) {
-        // 10062: Unknown interaction (Zaman aşımı)
-        // 40060: Interaction already acknowledged (Başka bir instance/cluster çoktan yanıtlamış)
-        if (e.code === 10062 || e.code === 40060) {
-            debug(`[IGNORED] Discord API ${e.code}: Çift tetiklenme veya zaman aşımı yoksayıldı.`);
-        } else {
-            errorLog("ReplySafe Error", e);
-        }
+        // Çift tetiklenme veya zaman aşımı gibi masum hataları yoksay
+        if (e.code === 10062 || e.code === 40060) return;
+        errorLog("ReplySafe Error", e);
     }
 }
 
@@ -1474,15 +1470,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     let startTime = Date.now();
     try {
-        // Smart Defer Mechanism - Bazı komutları gizli(ephemeral) olarak bekletmeliyiz
+        // Smart Defer Mechanism - "ephemeral" warning fix & avoid 40060 crash
         const ephemeralCommands = ["cooldowns", "admin"];
         const isEphemeral = ephemeralCommands.includes(interaction.commandName);
 
         if (COMMAND_DEFER_MODE === "smart") {
             try {
-                await interaction.deferReply({ ephemeral: isEphemeral });
+                // Warning veren eski obje formatı yerine yeni Flags kullanıyoruz
+                const deferOptions = isEphemeral ? { flags: MessageFlags.Ephemeral } : {};
+                await interaction.deferReply(deferOptions);
             } catch (deferErr) {
-                // Eğer defer atarken 40060 hatası yersek işlemi tamamen kes, bot çift çalışıyor demektir.
+                // Eğer bota tam bu saniyede reset atılıp bot çift çalışıyorsa, ikincisini iptal et
                 if (deferErr.code === 40060 || deferErr.code === 10062) return;
                 throw deferErr;
             }
@@ -1497,7 +1495,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         debug(`Command /${interaction.commandName} executed`, Date.now() - startTime);
 
     } catch (err) {
-        // API Hatalarını ve Çift Tetiklenmeleri Filtrele
         if (err.code === 40060 || err.code === 10062) return;
 
         const isSystemError = err.message.includes("DiscordAPI") || err.message.includes("is not defined") || err.message.includes("read properties");
@@ -1505,10 +1502,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (isSystemError) errorLog(`System Error (${interaction.commandName})`, err);
         
         let errPayload = USE_GLOBAL_ERROR_EMBEDS === "true" 
-            ? { embeds: [embedBase(THEME.error).setDescription(msg)] } 
-            : { content: msg };
-            
-        errPayload.flags = MessageFlags.Ephemeral;
+            ? { embeds: [embedBase(THEME.error).setDescription(msg)], flags: MessageFlags.Ephemeral } 
+            : { content: msg, flags: MessageFlags.Ephemeral };
 
         await replySafe(interaction, errPayload);
     }
