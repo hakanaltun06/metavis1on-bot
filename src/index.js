@@ -1,15 +1,16 @@
 /**
  * ============================================================================
- * MetaCoin REBORN v1.0.0
+ * MetaCoin REBORN v1.0.0 (Hardening & Completion Update)
  * Next-Gen Advanced Discord Economy Bot
- * * Özellikler:
- * - Asenkron JSON ve Firestore Storage Soyutlaması
- * - Kapsamlı Finans: Kredi, Faiz, Vergi, Yatırım
- * - Gelişmiş Kumar, Envanter, Kasa, Yetenek Sistemleri
- * - Tek Dosya Mimarisi (Render ve Heroku Uyumlu)
+ * * * Mimarisi: 30 Bölümlük Organize Tek Dosya (Single-File Architecture)
+ * * Özellikler: Lazy Faiz Sistemi, Dinamik Kredi/Ceza, Gelişmiş Audit/Admin
+ * * Güvenlik: Smart Defer Interaction Router, Atomic Locks, Exploit Koruması
  * ============================================================================
  */
 
+// ============================================================================
+// 1. IMPORTS
+// ============================================================================
 import "dotenv/config";
 import express from "express";
 import fs from "node:fs";
@@ -18,47 +19,46 @@ import path from "node:path";
 import crypto from "node:crypto";
 import admin from "firebase-admin";
 import {
-    Client, GatewayIntentBits, REST, Routes, Collection, Events,
-    SlashCommandBuilder, EmbedBuilder, MessageFlags, Colors
+    Client, GatewayIntentBits, REST, Routes, Events,
+    SlashCommandBuilder, EmbedBuilder, MessageFlags
 } from "discord.js";
 
 // ============================================================================
-// 1. ENVIRONMENT & CONFIG
+// 2. ENVIRONMENT & CONFIG
 // ============================================================================
 const {
     DISCORD_TOKEN, CLIENT_ID, GUILD_ID, PORT = 3000,
     REGISTER_COMMANDS = "true", OWNER_IDS = "", DEBUG = "false",
-    DATA_PROVIDER = "json", STARTING_WALLET = "0", STARTING_BANK = "0",
-    STARTING_BANK_MAX = "50000", DAILY_COOLDOWN_HOURS = "20",
-    WORK_COOLDOWN_MINUTES = "30", BEG_COOLDOWN_MINUTES = "2",
+    COMMAND_DEFER_MODE = "smart", USE_GLOBAL_ERROR_EMBEDS = "true", ENABLE_AUDIT_LOGS = "true",
+    DATA_PROVIDER = "json", STARTING_WALLET = "0", STARTING_BANK = "0", STARTING_BANK_MAX = "50000",
+    DAILY_COOLDOWN_HOURS = "20", WORK_COOLDOWN_MINUTES = "30", BEG_COOLDOWN_MINUTES = "2",
     CRIME_COOLDOWN_MINUTES = "10", ROB_COOLDOWN_MINUTES = "60",
-    INTEREST_ENABLED = "true", INTEREST_INTERVAL_HOURS = "12",
-    INTEREST_RATE_SAVINGS = "0.02", INTEREST_RATE_LOAN = "0.05",
-    INTEREST_CAP_MULTIPLIER = "0.20", TAX_ENABLED = "true",
-    TAX_RATE_TRANSFER = "0.02", TAX_RATE_WITHDRAW = "0.01",
-    TAX_RATE_GAMBLING_WIN = "0.03", MAX_BET_AMOUNT = "100000",
-    MAX_SLOTS_AMOUNT = "50000", MAX_COINFLIP_AMOUNT = "100000",
-    MAX_TRANSFER_AMOUNT = "1000000", ECONOMY_CURRENCY_NAME = "MetaCoin",
-    ECONOMY_CURRENCY_SYMBOL = "MC", AUTO_SAVE_INTERVAL_MS = "15000",
-    BACKUP_INTERVAL_MINUTES = "30", FIREBASE_PROJECT_ID,
-    FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
+    INTEREST_ENABLED = "true", INTEREST_INTERVAL_HOURS = "12", INTEREST_RATE_SAVINGS = "0.02",
+    INTEREST_CAP_MULTIPLIER = "0.20", INTEREST_MAX_IDLE_HOURS = "168", INTEREST_MIN_BALANCE = "1000",
+    INTEREST_RATE_LOAN = "0.05", LOAN_LATE_PENALTY_RATE = "0.10", LOAN_MAX_ACTIVE_COUNT = "3",
+    INVESTMENT_BREAK_PENALTY_RATE = "0.15",
+    TAX_ENABLED = "true", TAX_RATE_TRANSFER = "0.02", TAX_RATE_WITHDRAW = "0.01", TAX_RATE_GAMBLING_WIN = "0.03",
+    MAX_BET_AMOUNT = "100000", MAX_SLOTS_AMOUNT = "50000", MAX_COINFLIP_AMOUNT = "100000", MAX_TRANSFER_AMOUNT = "1000000",
+    MAX_CRATE_OPEN_BATCH = "50", MAX_SELL_BATCH = "100", MAX_BUY_BATCH = "50",
+    MAX_INVENTMENT_DAYS = "30", MAX_TRANSACTION_HISTORY = "50",
+    ECONOMY_CURRENCY_NAME = "MetaCoin", ECONOMY_CURRENCY_SYMBOL = "MC",
+    AUTO_SAVE_INTERVAL_MS = "15000", BACKUP_INTERVAL_MINUTES = "30",
+    FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
 } = process.env;
 
 if (!DISCORD_TOKEN || !CLIENT_ID) {
     console.error("FATAL: DISCORD_TOKEN ve CLIENT_ID zorunludur!");
     process.exit(1);
 }
-
 const ADMIN_LIST = OWNER_IDS.split(",").map(id => id.trim()).filter(Boolean);
 const IS_DEBUG = DEBUG === "true";
 const VERSION = "1.0.0 - REBORN";
 
 // ============================================================================
-// 2. CONSTANTS
+// 3. CONSTANTS
 // ============================================================================
 const THEME = {
-    main: 0x00c2ff, success: 0x2ecc71, error: 0xe74c3c,
-    gamble: 0x9b59b6, admin: 0xe67e22, shop: 0xf1c40f, finance: 0x34495e
+    main: 0x00c2ff, success: 0x2ecc71, error: 0xe74c3c, gamble: 0x9b59b6, admin: 0xe67e22, shop: 0xf1c40f, finance: 0x34495e, audit: 0x7f8c8d
 };
 
 const COOLDOWNS = {
@@ -88,18 +88,24 @@ const SELL_VALUES = {
 };
 
 // ============================================================================
-// 3. LOGGER & UTILITY FUNCTIONS
+// 4. LOGGER / DIAGNOSTICS
 // ============================================================================
 const log = (msg) => console.log(`[META] ${msg}`);
-const debug = (msg) => { if (IS_DEBUG) console.log(`[DEBUG] ${msg}`); };
+const debug = (msg, ms = 0) => { if (IS_DEBUG) console.log(`[DEBUG] ${msg} ${ms ? `(${ms}ms)` : ''}`); };
 const errorLog = (msg, err) => console.error(`[ERROR] ${msg}`, err);
+
+// ============================================================================
+// 5. UTILITY FUNCTIONS
+// ============================================================================
 const nowSec = () => Math.floor(Date.now() / 1000);
 const randint = (min, max) => crypto.randomInt(min, max + 1);
 const fmt = (n) => `${Number(n).toLocaleString("tr-TR")} ${ECONOMY_CURRENCY_SYMBOL}`;
 const generateId = () => crypto.randomBytes(8).toString('hex');
 
 function embedBase(color = THEME.main) {
-    return new EmbedBuilder().setColor(color).setFooter({ text: `MetaCoin REBORN • v${VERSION}`, iconURL: "https://cdn.discordapp.com/embed/avatars/0.png" }).setTimestamp();
+    return new EmbedBuilder().setColor(color)
+        .setFooter({ text: `MetaCoin REBORN • v${VERSION}`, iconURL: "https://cdn.discordapp.com/embed/avatars/0.png" })
+        .setTimestamp();
 }
 
 function choiceWeighted(entries) {
@@ -124,6 +130,15 @@ function msToHuman(ms) {
     return parts.join(" ") || "az kaldı";
 }
 
+function makeXpBar(current, req, length = 10) {
+    let p = Math.round((current / req) * length);
+    if (p > length) p = length;
+    return "█".repeat(p) + "░".repeat(length - p);
+}
+
+// ============================================================================
+// 6. VALIDATION HELPERS
+// ============================================================================
 function validateAmount(val, allowAll = false) {
     if (allowAll && typeof val === "string" && val.toLowerCase() === "all") return "all";
     const num = Math.floor(Number(val));
@@ -133,8 +148,12 @@ function validateAmount(val, allowAll = false) {
     return num;
 }
 
+function enforceBatchLimit(count, max) {
+    if (count > max) throw new Error(`Bu işlemi tek seferde en fazla ${max} adet için yapabilirsiniz.`);
+}
+
 // ============================================================================
-// 4. USER MODEL DEFAULTS
+// 7. USER MODEL DEFAULTS
 // ============================================================================
 const createUserTemplate = (userId) => ({
     user_id: userId,
@@ -143,8 +162,9 @@ const createUserTemplate = (userId) => ({
     bank_max: Number(STARTING_BANK_MAX),
     xp: 0, level: 1, bio: null,
     created_at: nowSec(), updated_at: nowSec(),
+    last_interest_calc: nowSec(), // Lazy Interest Track
     daily_streak: 0, last_daily: 0,
-    total_interest_earned: 0, total_loan_interest_paid: 0, credit_score: 500,
+    total_interest_earned: 0, total_loan_interest_paid: 0, total_taxes_paid: 0, credit_score: 500,
     stats: {
         total_earned: 0, total_lost: 0, total_transferred_in: 0, total_transferred_out: 0,
         crates_opened: 0, items_sold: 0, work_uses: 0, beg_uses: 0,
@@ -154,13 +174,28 @@ const createUserTemplate = (userId) => ({
     }
 });
 
+// Auto-Heal Function for schema updates on the fly
+function normalizeSchema(user) {
+    const tpl = createUserTemplate(user.user_id);
+    const healObj = (target, source) => {
+        for (let k in source) {
+            if (target[k] === undefined) target[k] = source[k];
+            else if (typeof source[k] === "object" && source[k] !== null && !Array.isArray(source[k])) {
+                if (typeof target[k] !== "object") target[k] = {};
+                healObj(target[k], source[k]);
+            }
+        }
+    };
+    healObj(user, tpl);
+    return user;
+}
+
 // ============================================================================
-// 5. STORAGE ABSTRACTION LAYER (JSON & FIRESTORE)
+// 8. STORAGE ABSTRACTION LAYER
 // ============================================================================
 class StorageManager {
     constructor() { this.provider = DATA_PROVIDER; this.locks = new Set(); }
     
-    // Concurrency Lock for Atomic Transactions
     async acquireLock(userId) {
         while (this.locks.has(userId)) await new Promise(r => setTimeout(r, 50));
         this.locks.add(userId);
@@ -170,41 +205,49 @@ class StorageManager {
     async init() {
         if (this.provider === "firestore") await FirestoreImpl.init();
         else await JsonImpl.init();
-        log(`Storage başlatıldı. Sağlayıcı: ${this.provider.toUpperCase()}`);
+        log(`Storage Modülü Aktif: ${this.provider.toUpperCase()}`);
     }
-    async getUser(id) { return this.provider === "firestore" ? FirestoreImpl.getUser(id) : JsonImpl.getUser(id); }
+
+    // Core Data
+    async getUser(id) { let u = this.provider === "firestore" ? await FirestoreImpl.getUser(id) : await JsonImpl.getUser(id); return normalizeSchema(u); }
     async saveUser(id, data) { data.updated_at = nowSec(); return this.provider === "firestore" ? FirestoreImpl.saveUser(id, data) : JsonImpl.saveUser(id, data); }
     async getInventory(id) { return this.provider === "firestore" ? FirestoreImpl.getInventory(id) : JsonImpl.getInventory(id); }
     async saveInventory(id, inv) { return this.provider === "firestore" ? FirestoreImpl.saveInventory(id, inv) : JsonImpl.saveInventory(id, inv); }
-    async addTransaction(id, tx) { tx.id = generateId(); tx.timestamp = nowSec(); return this.provider === "firestore" ? FirestoreImpl.addTransaction(id, tx) : JsonImpl.addTransaction(id, tx); }
-    
-    // EKSİK OLAN VE EKLENEN SATIR BURASI:
+    async getAllUsers() { return this.provider === "firestore" ? FirestoreImpl.getAllUsers() : JsonImpl.getAllUsers(); }
+
+    // Sub-Collections
     async getCollection(id, col) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, col) : JsonImpl.getCollection(id, col); }
-    
-    async getLoans(id) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, "loans") : JsonImpl.getCollection(id, "loans"); }
-    async saveLoan(id, loan) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, "loans", loan.id, loan) : JsonImpl.saveDocument(id, "loans", loan.id, loan); }
-    async getInvestments(id) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, "investments") : JsonImpl.getCollection(id, "investments"); }
-    async saveInvestment(id, inv) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, "investments", inv.id, inv) : JsonImpl.saveDocument(id, "investments", inv.id, inv); }
-    async deleteDocument(userId, col, docId) { return this.provider === "firestore" ? FirestoreImpl.deleteDocument(userId, col, docId) : JsonImpl.deleteDocument(userId, col, docId); }
+    async saveDocument(id, col, docId, doc) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, col, docId, doc) : JsonImpl.saveDocument(id, col, docId, doc); }
+    async deleteDocument(id, col, docId) { return this.provider === "firestore" ? FirestoreImpl.deleteDocument(id, col, docId) : JsonImpl.deleteDocument(id, col, docId); }
+
+    // Helpers
+    async addTransaction(id, tx) { 
+        tx.id = generateId(); tx.timestamp = nowSec(); 
+        return this.provider === "firestore" ? FirestoreImpl.addTransaction(id, tx) : JsonImpl.addTransaction(id, tx); 
+    }
     async getCooldown(id, cmd) { return this.provider === "firestore" ? FirestoreImpl.getCooldown(id, cmd) : JsonImpl.getCooldown(id, cmd); }
     async setCooldown(id, cmd, ms) { return this.provider === "firestore" ? FirestoreImpl.setCooldown(id, cmd, ms) : JsonImpl.setCooldown(id, cmd, ms); }
     async resetCooldown(id, cmd) { return this.provider === "firestore" ? FirestoreImpl.resetCooldown(id, cmd) : JsonImpl.resetCooldown(id, cmd); }
-    async getAllUsers() { return this.provider === "firestore" ? FirestoreImpl.getAllUsers() : JsonImpl.getAllUsers(); }
+
+    // Global Config & Audit
+    async getGlobalConfig() { return this.provider === "firestore" ? FirestoreImpl.getGlobalConfig() : JsonImpl.getGlobalConfig(); }
+    async saveGlobalConfig(conf) { return this.provider === "firestore" ? FirestoreImpl.saveGlobalConfig(conf) : JsonImpl.saveGlobalConfig(conf); }
+    async addAuditLog(entry) { return this.provider === "firestore" ? FirestoreImpl.addAuditLog(entry) : JsonImpl.addAuditLog(entry); }
 }
 
-// ----------------------------------------------------------------------------
-// 5.1 JSON STORAGE IMPLEMENTATION
-// ----------------------------------------------------------------------------
+// ============================================================================
+// 9. JSON STORAGE IMPLEMENTATION
+// ============================================================================
 const JsonImpl = {
     file: path.join(process.cwd(), "data", "metacoin.json"),
-    data: { users: {}, inventories: {}, transactions: {}, loans: {}, investments: {}, cooldowns: {} },
+    data: { users: {}, inventories: {}, transactions: {}, loans: {}, investments: {}, cooldowns: {}, system_config: { blacklist: [], economy_freeze: false }, audit_logs: [] },
     dirty: false,
     async init() {
         const dir = path.join(process.cwd(), "data");
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         try {
             const raw = await fsp.readFile(this.file, "utf8");
-            this.data = JSON.parse(raw);
+            this.data = { ...this.data, ...JSON.parse(raw) };
         } catch { await this.save(true); }
         setInterval(() => this.save(), Number(AUTO_SAVE_INTERVAL_MS));
         setInterval(() => this.backup(), Number(BACKUP_INTERVAL_MINUTES) * 60000);
@@ -217,114 +260,82 @@ const JsonImpl = {
             const tmp = this.file + ".tmp";
             await fsp.writeFile(tmp, JSON.stringify(this.data, null, 2), "utf8");
             await fsp.rename(tmp, this.file);
-            debug("JSON verisi diske atomic yazıldı.");
+            debug("JSON Sync Complete");
         } catch (e) { errorLog("JSON Save Error", e); }
     },
     async backup() {
-        try {
-            const bkpName = `metacoin_backup_${nowSec()}.json`;
-            await fsp.writeFile(path.join(process.cwd(), "data", bkpName), JSON.stringify(this.data));
-            log(`Otomatik yedek alındı: ${bkpName}`);
-        } catch(e) { errorLog("Backup Error", e); }
+        try { await fsp.writeFile(path.join(process.cwd(), "data", `metacoin_backup_${nowSec()}.json`), JSON.stringify(this.data)); } 
+        catch(e) { errorLog("Backup Error", e); }
     },
-    async getUser(id) { 
-        if (!this.data.users[id]) { this.data.users[id] = createUserTemplate(id); this.mark(); }
-        return { ...this.data.users[id] }; // Return copy
-    },
+    async getUser(id) { if (!this.data.users[id]) { this.data.users[id] = createUserTemplate(id); this.mark(); } return { ...this.data.users[id] }; },
     async saveUser(id, user) { this.data.users[id] = user; this.mark(); },
     async getInventory(id) { return this.data.inventories[id] || {}; },
     async saveInventory(id, inv) { this.data.inventories[id] = inv; this.mark(); },
     async addTransaction(id, tx) { 
         if (!this.data.transactions[id]) this.data.transactions[id] = [];
         this.data.transactions[id].push(tx); 
-        if(this.data.transactions[id].length > 50) this.data.transactions[id].shift(); // Keep last 50
+        if(this.data.transactions[id].length > Number(MAX_TRANSACTION_HISTORY)) this.data.transactions[id].shift();
         this.mark();
     },
-    async getCollection(id, col) { return Object.values(this.data[col][id] || {}); },
-    async saveDocument(id, col, docId, doc) { 
-        if (!this.data[col][id]) this.data[col][id] = {};
-        this.data[col][id][docId] = doc; this.mark(); 
-    },
-    async deleteDocument(id, col, docId) {
-        if (this.data[col][id] && this.data[col][id][docId]) { delete this.data[col][id][docId]; this.mark(); }
-    },
+    async getCollection(id, col) { return Object.values(this.data[col]?.[id] || {}); },
+    async saveDocument(id, col, docId, doc) { if (!this.data[col][id]) this.data[col][id] = {}; this.data[col][id][docId] = doc; this.mark(); },
+    async deleteDocument(id, col, docId) { if (this.data[col][id]?.[docId]) { delete this.data[col][id][docId]; this.mark(); } },
     async getCooldown(id, cmd) { return this.data.cooldowns[`${id}:${cmd}`] || 0; },
     async setCooldown(id, cmd, ms) { this.data.cooldowns[`${id}:${cmd}`] = nowSec() + Math.ceil(ms / 1000); this.mark(); },
     async resetCooldown(id, cmd) { delete this.data.cooldowns[`${id}:${cmd}`]; this.mark(); },
-    async getAllUsers() { return Object.values(this.data.users); }
+    async getAllUsers() { return Object.values(this.data.users); },
+    async getGlobalConfig() { return this.data.system_config || { blacklist: [], economy_freeze: false }; },
+    async saveGlobalConfig(conf) { this.data.system_config = conf; this.mark(); },
+    async addAuditLog(entry) { this.data.audit_logs.push(entry); if (this.data.audit_logs.length > 500) this.data.audit_logs.shift(); this.mark(); }
 };
 
-// ----------------------------------------------------------------------------
-// 5.2 FIRESTORE STORAGE IMPLEMENTATION
-// ----------------------------------------------------------------------------
+// ============================================================================
+// 10. FIRESTORE STORAGE IMPLEMENTATION
+// ============================================================================
 let db;
 const FirestoreImpl = {
     async init() {
-        const pk = FIREBASE_PRIVATE_KEY ? FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined;
-        if(!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !pk) throw new Error("Firestore ENV eksik!");
-        admin.initializeApp({ credential: admin.credential.cert({ projectId: FIREBASE_PROJECT_ID, clientEmail: FIREBASE_CLIENT_EMAIL, privateKey: pk }) });
+        if (!admin.apps.length) {
+            const pk = FIREBASE_PRIVATE_KEY ? FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined;
+            if(!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !pk) throw new Error("Firestore ENV eksik!");
+            admin.initializeApp({ credential: admin.credential.cert({ projectId: FIREBASE_PROJECT_ID, clientEmail: FIREBASE_CLIENT_EMAIL, privateKey: pk }) });
+        }
         db = admin.firestore();
     },
     async getUser(id) {
         const snap = await db.collection("users").doc(id).get();
-        if (!snap.exists) {
-            const newUser = createUserTemplate(id);
-            await db.collection("users").doc(id).set(newUser);
-            return newUser;
-        }
-        const data = snap.data();
-        if(!data.stats) data.stats = createUserTemplate(id).stats; // Fallback for old schema
-        return data;
+        if (!snap.exists) { const nu = createUserTemplate(id); await db.collection("users").doc(id).set(nu); return nu; }
+        return snap.data();
     },
     async saveUser(id, user) { await db.collection("users").doc(id).set(user, { merge: true }); },
-    async getInventory(id) { 
-        const snap = await db.collection("users").doc(id).collection("inventory").get();
-        const inv = {}; snap.forEach(d => inv[d.id] = d.data().qty); return inv;
-    },
+    async getInventory(id) { const snap = await db.collection("users").doc(id).collection("inventory").get(); const inv = {}; snap.forEach(d => inv[d.id] = d.data().qty); return inv; },
     async saveInventory(id, inv) {
-        const batch = db.batch();
-        const ref = db.collection("users").doc(id).collection("inventory");
-        for (const [item, qty] of Object.entries(inv)) {
-            if (qty <= 0) batch.delete(ref.doc(item));
-            else batch.set(ref.doc(item), { qty });
-        }
+        const batch = db.batch(); const ref = db.collection("users").doc(id).collection("inventory");
+        for (const [item, qty] of Object.entries(inv)) { if (qty <= 0) batch.delete(ref.doc(item)); else batch.set(ref.doc(item), { qty }); }
         await batch.commit();
     },
     async addTransaction(id, tx) { await db.collection("users").doc(id).collection("transactions").doc(tx.id).set(tx); },
-    async getCollection(id, col) {
-        const snap = await db.collection("users").doc(id).collection(col).get();
-        return snap.docs.map(d => d.data());
-    },
+    async getCollection(id, col) { const snap = await db.collection("users").doc(id).collection(col).get(); return snap.docs.map(d => d.data()); },
     async saveDocument(id, col, docId, doc) { await db.collection("users").doc(id).collection(col).doc(docId).set(doc); },
     async deleteDocument(id, col, docId) { await db.collection("users").doc(id).collection(col).doc(docId).delete(); },
-    async getCooldown(id, cmd) {
-        const s = await db.collection("users").doc(id).collection("cooldowns").doc(cmd).get();
-        return s.exists ? s.data().expiresAt : 0;
-    },
+    async getCooldown(id, cmd) { const s = await db.collection("users").doc(id).collection("cooldowns").doc(cmd).get(); return s.exists ? s.data().expiresAt : 0; },
     async setCooldown(id, cmd, ms) { await db.collection("users").doc(id).collection("cooldowns").doc(cmd).set({ expiresAt: nowSec() + Math.ceil(ms / 1000) }); },
     async resetCooldown(id, cmd) { await db.collection("users").doc(id).collection("cooldowns").doc(cmd).delete(); },
-    async getAllUsers() {
-        const s = await db.collection("users").get();
-        return s.docs.map(d => d.data());
-    }
+    async getAllUsers() { const s = await db.collection("users").get(); return s.docs.map(d => d.data()); },
+    async getGlobalConfig() { const s = await db.collection("system").doc("config").get(); return s.exists ? s.data() : { blacklist: [], economy_freeze: false }; },
+    async saveGlobalConfig(conf) { await db.collection("system").doc("config").set(conf, { merge: true }); },
+    async addAuditLog(entry) { await db.collection("audit_logs").doc(entry.id).set(entry); }
 };
 
 const DB = new StorageManager();
 
 // ============================================================================
-// 6. ECONOMY CORE & UNIFIED FUNCTIONS
+// 11. UNIFIED REPOSITORY FUNCTIONS & SECURITY CHECKS
 // ============================================================================
-
-// Helper: Vergi hesaplama ve kesme
-function applyTax(amount, type) {
-    if (TAX_ENABLED !== "true") return { amount, tax: 0 };
-    let rate = 0;
-    if (type === "transfer") rate = Number(TAX_RATE_TRANSFER);
-    if (type === "withdraw") rate = Number(TAX_RATE_WITHDRAW);
-    if (type === "gamble") rate = Number(TAX_RATE_GAMBLING_WIN);
-    
-    const tax = Math.floor(amount * rate);
-    return { amount: amount - tax, tax };
+async function checkGlobalSecurity(userId) {
+    const conf = await DB.getGlobalConfig();
+    if (conf.blacklist && conf.blacklist.includes(userId)) throw new Error("⛔ Kara listedesiniz. Sistemleri kullanamazsınız.");
+    if (conf.economy_freeze && !ADMIN_LIST.includes(userId)) throw new Error("❄️ Ekonomi şu an bakıma alındı (Freeze). İşlemler geçici olarak durduruldu.");
 }
 
 async function updateStat(u, key, amount, isMaxCheck = false) {
@@ -333,23 +344,32 @@ async function updateStat(u, key, amount, isMaxCheck = false) {
     else { u.stats[key] += amount; }
 }
 
-function addXP(u, amount) {
-    u.xp += amount;
-    let req = u.level * 500, leveledUp = false, reward = 0;
-    while (u.xp >= req) {
-        u.xp -= req; u.level++; leveledUp = true;
-        u.bank_max += 2500;
-        reward += u.level * 500;
-        u.wallet += u.level * 500;
-        req = u.level * 500;
-    }
-    return { level: u.level, leveledUp, reward };
+async function getNetworth(userId) {
+    const u = await DB.getUser(userId);
+    const inv = await DB.getInventory(userId);
+    let itemsWorth = 0;
+    for (const [it, qty] of Object.entries(inv)) itemsWorth += (SELL_VALUES[it] || 0) * qty;
+    return u.wallet + u.bank + itemsWorth;
+}
+
+// ============================================================================
+// 12. ECONOMY CORE
+// ============================================================================
+function applyTax(amount, type, userObj) {
+    if (TAX_ENABLED !== "true") return { amount, tax: 0 };
+    let rate = 0;
+    if (type === "transfer") rate = Number(TAX_RATE_TRANSFER);
+    if (type === "withdraw") rate = Number(TAX_RATE_WITHDRAW);
+    if (type === "gamble") rate = Number(TAX_RATE_GAMBLING_WIN);
+    
+    const tax = Math.floor(amount * rate);
+    userObj.total_taxes_paid = (userObj.total_taxes_paid || 0) + tax;
+    return { amount: amount - tax, tax };
 }
 
 async function addItem(userId, item, qty) {
     const inv = await DB.getInventory(userId);
     inv[item] = (inv[item] || 0) + qty;
-    if (inv[item] <= 0) delete inv[item];
     await DB.saveInventory(userId, inv);
 }
 
@@ -362,27 +382,13 @@ async function removeItem(userId, item, qty) {
     return true;
 }
 
-async function getNetworth(userId) {
-    const u = await DB.getUser(userId);
-    const inv = await DB.getInventory(userId);
-    let itemsWorth = 0;
-    for (const [it, qty] of Object.entries(inv)) itemsWorth += (SELL_VALUES[it] || 0) * qty;
-    return u.wallet + u.bank + itemsWorth;
-}
-
-async function checkCooldownLeft(userId, cmd) {
-    const readyAt = await DB.getCooldown(userId, cmd);
-    const now = nowSec();
-    return (readyAt > now) ? (readyAt - now) * 1000 : 0;
-}
-
 // ============================================================================
-// 7. FINANCE SYSTEMS (Banks, Loans, Investments)
+// 13. TAX / TRANSFER / WALLET / BANK LOGIC
 // ============================================================================
-
 async function processDeposit(userId, amountStr) {
     await DB.acquireLock(userId);
     try {
+        await accrueInterestLazy(userId); // Compute pending interest first
         const u = await DB.getUser(userId);
         let amount = validateAmount(amountStr, true) === "all" ? u.wallet : validateAmount(amountStr);
         if (u.wallet < amount) throw new Error("Cüzdanda yeterli bakiye yok.");
@@ -400,13 +406,13 @@ async function processDeposit(userId, amountStr) {
 async function processWithdraw(userId, amountStr) {
     await DB.acquireLock(userId);
     try {
+        await accrueInterestLazy(userId); // Get lazy interest before withdraw
         const u = await DB.getUser(userId);
         let amount = validateAmount(amountStr, true) === "all" ? u.bank : validateAmount(amountStr);
         if (u.bank < amount) throw new Error("Bankada yeterli bakiye yok.");
         
-        const { amount: net, tax } = applyTax(amount, "withdraw");
-        u.bank -= amount; 
-        u.wallet += net;
+        const { amount: net, tax } = applyTax(amount, "withdraw", u);
+        u.bank -= amount; u.wallet += net;
         
         await DB.saveUser(userId, u);
         await DB.addTransaction(userId, { type: "withdraw", amount, net, tax, status: "success" });
@@ -416,61 +422,92 @@ async function processWithdraw(userId, amountStr) {
 
 async function processTransfer(fromId, toId, amountStr) {
     if (fromId === toId) throw new Error("Kendine para gönderemezsin.");
-    const amount = validateAmount(amountStr);
-    if (amount > Number(MAX_TRANSFER_AMOUNT)) throw new Error(`Tek seferde en fazla ${fmt(MAX_TRANSFER_AMOUNT)} gönderebilirsin.`);
+    const amount = validateAmount(amountStr, true); // if all passed, we handle below
     
     await DB.acquireLock(fromId);
     await DB.acquireLock(toId);
     try {
         const from = await DB.getUser(fromId);
-        if (from.wallet < amount) throw new Error("Cüzdanında yeterli para yok.");
+        let finalAmount = amount === "all" ? from.wallet : amount;
         
-        const { amount: net, tax } = applyTax(amount, "transfer");
-        from.wallet -= amount;
-        updateStat(from, "total_transferred_out", amount);
+        if (finalAmount > Number(MAX_TRANSFER_AMOUNT)) throw new Error(`Tek seferde en fazla ${fmt(MAX_TRANSFER_AMOUNT)} gönderebilirsin.`);
+        if (from.wallet < finalAmount) throw new Error("Cüzdanında yeterli para yok.");
+        
+        const { amount: net, tax } = applyTax(finalAmount, "transfer", from);
+        from.wallet -= finalAmount;
+        updateStat(from, "total_transferred_out", finalAmount);
         
         const to = await DB.getUser(toId);
         to.wallet += net;
         updateStat(to, "total_transferred_in", net);
         
-        await DB.saveUser(fromId, from);
-        await DB.saveUser(toId, to);
-        await DB.addTransaction(fromId, { type: "transfer_out", to: toId, amount, tax });
+        await DB.saveUser(fromId, from); await DB.saveUser(toId, to);
+        await DB.addTransaction(fromId, { type: "transfer_out", to: toId, amount: finalAmount, tax });
         await DB.addTransaction(toId, { type: "transfer_in", from: fromId, amount: net, tax_paid_by_sender: tax });
         
-        return { net, tax, total: amount };
-    } finally { 
-        DB.releaseLock(fromId); DB.releaseLock(toId); 
-    }
+        return { net, tax, total: finalAmount };
+    } finally { DB.releaseLock(fromId); DB.releaseLock(toId); }
 }
 
 // ============================================================================
-// 8. LOANS & INVESTMENTS
+// 14. XP / LEVEL / RANK LOGIC
 // ============================================================================
+function processXP(u, amount) {
+    u.xp += amount;
+    let req = u.level * 500, leveledUp = false, reward = 0;
+    while (u.xp >= req) {
+        u.xp -= req; u.level++; leveledUp = true;
+        u.bank_max += 2500;
+        reward += u.level * 500;
+        u.wallet += u.level * 500;
+        req = u.level * 500;
+    }
+    return { level: u.level, leveledUp, reward };
+}
+
+// ============================================================================
+// 15. LOAN LOGIC (Hardened with Penalties & Limits)
+// ============================================================================
+function checkLoanPenalties(u, loans) {
+    let now = nowSec();
+    let penalized = false;
+    for (let l of loans) {
+        if (now > l.due_date && !l.is_penalized) {
+            let penalty = Math.floor(l.amount * Number(LOAN_LATE_PENALTY_RATE));
+            l.total_due += penalty;
+            l.is_penalized = true;
+            u.credit_score = Math.max(0, u.credit_score - 50); // Big penalty hit
+            penalized = true;
+        }
+    }
+    return penalized;
+}
 
 async function takeLoan(userId, amountStr) {
     const amount = validateAmount(amountStr);
     await DB.acquireLock(userId);
     try {
         const u = await DB.getUser(userId);
+        const loans = await DB.getLoans(userId);
+        checkLoanPenalties(u, loans); // Ensure strict penalty sync
+        
+        if (loans.length >= Number(LOAN_MAX_ACTIVE_COUNT)) throw new Error(`Aynı anda en fazla ${LOAN_MAX_ACTIVE_COUNT} aktif krediniz olabilir.`);
+        
         const networth = await getNetworth(userId);
         const limit = (u.level * 5000) + (networth * 0.1) + (u.credit_score * 100);
+        const currentDebt = loans.reduce((acc, l) => acc + l.total_due, 0);
         
-        const activeLoans = await DB.getLoans(userId);
-        const currentDebt = activeLoans.reduce((acc, l) => acc + l.total_due, 0);
-        
-        if (currentDebt + amount > limit) {
-            throw new Error(`Kredi limitin yetersiz. Maksimum Limit: ${fmt(limit)}\nMevcut Borcun: ${fmt(currentDebt)}`);
-        }
+        if (currentDebt + amount > limit) throw new Error(`Limit yetersiz.\nLimit: ${fmt(limit)}\nBorç: ${fmt(currentDebt)}`);
         
         const interest = Math.floor(amount * Number(INTEREST_RATE_LOAN));
         const totalDue = amount + interest;
-        const loan = { id: generateId(), amount, interest, total_due: totalDue, taken_at: nowSec(), due_date: nowSec() + (7 * 86400) }; // 7 Days
+        const loan = { id: generateId(), amount, interest, total_due: totalDue, taken_at: nowSec(), due_date: nowSec() + (7 * 86400), is_penalized: false };
         
         u.wallet += amount;
         updateStat(u, "loans_taken", 1);
         
         await DB.saveLoan(userId, loan);
+        for(let l of loans) if(l.is_penalized) await DB.saveLoan(userId, l); // Save altered loans
         await DB.saveUser(userId, u);
         await DB.addTransaction(userId, { type: "loan_taken", amount });
         
@@ -483,25 +520,27 @@ async function repayLoan(userId, loanId, amountStr) {
     try {
         const u = await DB.getUser(userId);
         const loans = await DB.getLoans(userId);
+        checkLoanPenalties(u, loans);
+        
         const loan = loans.find(l => l.id === loanId);
-        if (!loan) throw new Error("Böyle bir aktif kredi bulunamadı.");
+        if (!loan) throw new Error("Aktif kredi bulunamadı.");
         
         let amount = validateAmount(amountStr, true) === "all" ? loan.total_due : validateAmount(amountStr);
         if (amount > loan.total_due) amount = loan.total_due;
-        if (u.wallet < amount && u.bank < amount) throw new Error("Cüzdan veya bankanda yeterli para yok.");
+        if (u.wallet < amount && u.bank < amount) throw new Error("Cüzdan/banka yetersiz.");
         
-        // Deduct from wallet first, then bank
         if (u.wallet >= amount) u.wallet -= amount;
         else { const rem = amount - u.wallet; u.wallet = 0; u.bank -= rem; }
         
         loan.total_due -= amount;
         if (loan.total_due <= 0) {
             await DB.deleteDocument(userId, "loans", loanId);
-            u.credit_score += 10; // Boost credit score
+            u.credit_score += loan.is_penalized ? 2 : 15; // less recovery if penalized
             updateStat(u, "loans_repaid", 1);
         } else {
             await DB.saveLoan(userId, loan);
         }
+        for(let l of loans) if(l.is_penalized && l.id !== loanId) await DB.saveLoan(userId, l);
         await DB.saveUser(userId, u);
         await DB.addTransaction(userId, { type: "loan_repay", amount, loanId });
         
@@ -509,27 +548,32 @@ async function repayLoan(userId, loanId, amountStr) {
     } finally { DB.releaseLock(userId); }
 }
 
+// ============================================================================
+// 16. INVESTMENT LOGIC
+// ============================================================================
 async function createInvestment(userId, amountStr, daysStr) {
     const amount = validateAmount(amountStr);
     const days = validateAmount(daysStr);
-    if (days < 1 || days > 30) throw new Error("Vade süresi 1-30 gün arasında olmalıdır.");
+    if (days < 1 || days > Number(MAX_INVENTMENT_DAYS)) throw new Error(`Vade süresi 1-${MAX_INVENTMENT_DAYS} gün olmalıdır.`);
     
     await DB.acquireLock(userId);
     try {
         const u = await DB.getUser(userId);
-        if (u.wallet < amount) throw new Error("Cüzdanında yeterli para yok.");
+        if (u.wallet < amount) throw new Error("Cüzdan bakiyesi yetersiz.");
         
-        // Base interest 1% per day
-        const returnAmt = Math.floor(amount + (amount * 0.01 * days));
+        // Dynamic better returns for longer lock
+        let baseRate = 0.01;
+        if (days >= 7) baseRate = 0.012;
+        if (days >= 15) baseRate = 0.015;
+        if (days >= 30) baseRate = 0.02;
+        
+        const returnAmt = Math.floor(amount + (amount * baseRate * days));
         const inv = { id: generateId(), amount, return_amount: returnAmt, days, created_at: nowSec(), unlocks_at: nowSec() + (days * 86400) };
         
         u.wallet -= amount;
         updateStat(u, "investments_created", 1);
-        
-        await DB.saveInvestment(userId, inv);
-        await DB.saveUser(userId, u);
+        await DB.saveInvestment(userId, inv); await DB.saveUser(userId, u);
         await DB.addTransaction(userId, { type: "invest_create", amount, days });
-        
         return inv;
     } finally { DB.releaseLock(userId); }
 }
@@ -542,40 +586,183 @@ async function claimInvestment(userId, invId, forceBreak = false) {
         const inv = invs.find(i => i.id === invId);
         if (!inv) throw new Error("Yatırım bulunamadı.");
         
-        let payout = 0;
-        let isPenalty = false;
-        
-        if (nowSec() >= inv.unlocks_at) {
-            payout = inv.return_amount;
-        } else {
-            if (!forceBreak) throw new Error("Yatırımın süresi henüz dolmadı. Erken bozmak istiyorsan '/investment break' kullan.");
-            // Penalty: lose 10% of original
-            payout = Math.floor(inv.amount * 0.90);
+        let payout = 0, isPenalty = false;
+        if (nowSec() >= inv.unlocks_at) { payout = inv.return_amount; } 
+        else {
+            if (!forceBreak) throw new Error("Süre dolmadı. Cezalı erken bozmak için '/investment break' kullanın.");
+            let penaltyRate = Number(INVESTMENT_BREAK_PENALTY_RATE);
+            payout = Math.floor(inv.amount * (1 - penaltyRate));
             isPenalty = true;
-            u.credit_score = Math.max(0, u.credit_score - 15);
+            u.credit_score = Math.max(0, u.credit_score - 10);
+            await writeAuditLog(userId, "INVESTMENT_BREAK", userId, `Cezalı bozum. Kalan: ${inv.amount - payout}`);
         }
         
         u.wallet += payout;
         if (!isPenalty) updateStat(u, "investments_claimed", 1);
-        
-        await DB.deleteDocument(userId, "investments", invId);
-        await DB.saveUser(userId, u);
+        await DB.deleteDocument(userId, "investments", invId); await DB.saveUser(userId, u);
         await DB.addTransaction(userId, { type: "invest_claim", payout, isPenalty });
-        
         return { payout, isPenalty };
     } finally { DB.releaseLock(userId); }
 }
 
 // ============================================================================
-// 9. INCOME & GAMBLING ACTIONS
+// 17. INTEREST LOGIC (The Hardened Lazy Accrual)
 // ============================================================================
+async function accrueInterestLazy(userId) {
+    if (INTEREST_ENABLED !== "true") return 0;
+    // We expect lock to be already held by caller (e.g. processDeposit, balance fetch wrapper)
+    const u = await DB.getUser(userId);
+    let now = nowSec();
+    let last = u.last_interest_calc || now;
+    let elapsedHrs = (now - last) / 3600;
+    let intervalHrs = Number(INTEREST_INTERVAL_HOURS);
+    let intervals = Math.floor(elapsedHrs / intervalHrs);
+    let totalGained = 0;
 
+    if (intervals > 0) {
+        let maxIntervals = Math.floor(Number(INTEREST_MAX_IDLE_HOURS) / intervalHrs);
+        let validIntervals = Math.min(intervals, maxIntervals);
+
+        if (u.bank >= Number(INTEREST_MIN_BALANCE)) {
+            let cap = Math.floor(u.bank_max * Number(INTEREST_CAP_MULTIPLIER));
+            for(let i=0; i<validIntervals; i++) {
+                let tick = Math.floor(u.bank * Number(INTEREST_RATE_SAVINGS));
+                if (tick > cap) tick = cap;
+                totalGained += tick;
+                u.bank += tick;
+            }
+            if (totalGained > 0) {
+                u.total_interest_earned = (u.total_interest_earned || 0) + totalGained;
+                await DB.addTransaction(userId, { type: "interest_accrual", amount: totalGained });
+            }
+        }
+        u.last_interest_calc = now;
+        await DB.saveUser(userId, u);
+    }
+    return totalGained;
+}
+
+// Wrap fetching user for info commands to ensure interest is up-to-date
+async function getUserWithInterest(userId) {
+    await DB.acquireLock(userId);
+    try {
+        await accrueInterestLazy(userId);
+        return await DB.getUser(userId);
+    } finally { DB.releaseLock(userId); }
+}
+
+// ============================================================================
+// 18. INVENTORY / SHOP / CRATES (Batched)
+// ============================================================================
+async function buyItemOrCrate(userId, name, countStr) {
+    const count = validateAmount(countStr, true) === "all" ? Number(MAX_BUY_BATCH) : validateAmount(countStr);
+    enforceBatchLimit(count, Number(MAX_BUY_BATCH));
+    
+    await DB.acquireLock(userId);
+    try {
+        const u = await DB.getUser(userId);
+        if (CRATES[name]) {
+            const total = CRATES[name].price * count;
+            if (u.wallet < total) throw new Error(`Yetersiz bakiye. Gerekli: ${fmt(total)}`);
+            u.wallet -= total;
+            await addItem(userId, `${name} crate`, count); await DB.saveUser(userId, u);
+            return { type: "crate", total, count, name };
+        }
+        const rItem = Object.keys(SHOP_ITEMS).find(k => k.toLowerCase() === name.toLowerCase());
+        if (rItem) {
+            const total = SHOP_ITEMS[rItem].price * count;
+            if (u.wallet < total) throw new Error(`Yetersiz bakiye. Gerekli: ${fmt(total)}`);
+            u.wallet -= total;
+            await addItem(userId, rItem, count); await DB.saveUser(userId, u);
+            return { type: "item", total, count, name: rItem };
+        }
+        throw new Error("Mağazada bulunamadı.");
+    } finally { DB.releaseLock(userId); }
+}
+
+async function openCrates(userId, type, countStr) {
+    let count = validateAmount(countStr, true) === "all" ? "all" : validateAmount(countStr);
+    if (!CRATES[type]) throw new Error("Bilinmeyen kasa.");
+    
+    await DB.acquireLock(userId);
+    try {
+        const inv = await DB.getInventory(userId);
+        let available = inv[`${type} crate`] || 0;
+        if (available <= 0) throw new Error("Envanterinde kasa yok.");
+        if (count === "all") count = available;
+        enforceBatchLimit(count, Number(MAX_CRATE_OPEN_BATCH));
+        if (available < count) throw new Error("Yeterli kasa yok.");
+        
+        await removeItem(userId, `${type} crate`, count);
+        
+        const results = []; let totalCoins = 0;
+        for (let i = 0; i < count; i++) {
+            const roll = choiceWeighted(CRATES[type].loot);
+            if (roll.type === "coins") {
+                const amt = randint(roll.min, roll.max); totalCoins += amt; results.push({ type: "coins", amount: amt });
+            } else {
+                const qty = randint(roll.min, roll.max); await addItem(userId, roll.item, qty); results.push({ type: "item", item: roll.item, qty });
+            }
+        }
+        const u = await DB.getUser(userId);
+        if (totalCoins > 0) u.wallet += totalCoins;
+        updateStat(u, "crates_opened", count);
+        processXP(u, count * 10);
+        await DB.saveUser(userId, u);
+        return { count, totalCoins, results };
+    } finally { DB.releaseLock(userId); }
+}
+
+async function sellItems(userId, item, qtyStr) {
+    const qty = validateAmount(qtyStr, true) === "all" ? "all" : validateAmount(qtyStr);
+    const rItem = Object.keys(SELL_VALUES).find(k => k.toLowerCase() === item.toLowerCase());
+    if (!rItem) throw new Error("Bu eşya satılamaz.");
+    
+    await DB.acquireLock(userId);
+    try {
+        const inv = await DB.getInventory(userId);
+        let available = inv[rItem] || 0;
+        let finalQty = qty === "all" ? available : qty;
+        if (available < finalQty || finalQty <= 0) throw new Error("Yeterli eşya yok.");
+        enforceBatchLimit(finalQty, Number(MAX_SELL_BATCH));
+        
+        await removeItem(userId, rItem, finalQty);
+        const gain = SELL_VALUES[rItem] * finalQty;
+        const u = await DB.getUser(userId);
+        u.wallet += gain; updateStat(u, "items_sold", finalQty);
+        await DB.saveUser(userId, u);
+        return { gain, count: finalQty };
+    } finally { DB.releaseLock(userId); }
+}
+
+async function sellAllProcess(userId) {
+    await DB.acquireLock(userId);
+    try {
+        const inv = await DB.getInventory(userId);
+        let totalGain = 0, totalItems = 0;
+        for (const [it, q] of Object.entries(inv)) {
+            if (SELL_VALUES[it] && q > 0) {
+                totalGain += SELL_VALUES[it] * q;
+                totalItems += q;
+                await removeItem(userId, it, q);
+            }
+        }
+        if (totalGain === 0) throw new Error("Satılacak hiçbir değerli eşya yok.");
+        const u = await DB.getUser(userId);
+        u.wallet += totalGain; updateStat(u, "items_sold", totalItems);
+        await DB.saveUser(userId, u);
+        return { totalGain, totalItems };
+    } finally { DB.releaseLock(userId); }
+}
+
+// ============================================================================
+// 19. GAMBLING SYSTEMS
+// ============================================================================
 async function doAction(userId, actionType) {
     await DB.acquireLock(userId);
     try {
         const left = await checkCooldownLeft(userId, actionType);
         if (left > 0) return { ok: false, left };
-
         const u = await DB.getUser(userId);
         let earned = 0, event = "", ok = true, riskLost = 0;
 
@@ -589,56 +776,40 @@ async function doAction(userId, actionType) {
         } 
         else if (actionType === "work") {
             earned = randint(450, 900);
-            const events = ["Kod yazdın", "Garsonluk yaptın", "Maden kazdın", "Şarkı söyledin"];
-            event = events[randint(0, events.length - 1)];
-            updateStat(u, "work_uses", 1);
-            addXP(u, 15); // Kilitlenme çözüldü
+            event = ["Kod yazdın", "Garsonluk yaptın", "Maden kazdın", "Şarkı söyledin"][randint(0, 3)];
+            updateStat(u, "work_uses", 1); processXP(u, 15);
         } 
         else if (actionType === "beg") {
             updateStat(u, "beg_uses", 1);
             if (randint(1, 100) <= 25) { ok = false; event = "Kimse para vermedi."; }
-            else { earned = randint(50, 180); addXP(u, 5); } // Kilitlenme çözüldü
+            else { earned = randint(50, 180); processXP(u, 5); }
         } 
         else if (actionType === "crime") {
-            const caught = randint(1, 100) <= 45;
-            if (caught) {
+            if (randint(1, 100) <= 45) {
                 ok = false; riskLost = Math.min(u.wallet, randint(200, 700));
                 u.wallet -= riskLost; updateStat(u, "crime_fails", 1);
             } else {
-                earned = randint(600, 2200); updateStat(u, "crime_success", 1);
-                addXP(u, 25); // Kilitlenme çözüldü
+                earned = randint(600, 2200); updateStat(u, "crime_success", 1); processXP(u, 25);
             }
         }
-
-        if (ok && earned > 0) {
-            u.wallet += earned;
-            updateStat(u, "total_earned", earned);
-        }
-        
-        await DB.saveUser(userId, u);
-        await DB.setCooldown(userId, actionType, COOLDOWNS[actionType]);
+        if (ok && earned > 0) { u.wallet += earned; updateStat(u, "total_earned", earned); }
+        await DB.saveUser(userId, u); await DB.setCooldown(userId, actionType, COOLDOWNS[actionType]);
         return { ok, earned, event, riskLost, streak: u.daily_streak };
     } finally { DB.releaseLock(userId); }
 }
 
 async function processRob(userId, targetId) {
     if (userId === targetId) throw new Error("Kendini soyamazsın!");
-    await DB.acquireLock(userId);
-    await DB.acquireLock(targetId);
+    await DB.acquireLock(userId); await DB.acquireLock(targetId);
     try {
         const left = await checkCooldownLeft(userId, "rob");
         if (left > 0) return { ok: false, cooldown: true, left };
-
-        const u = await DB.getUser(userId);
-        const t = await DB.getUser(targetId);
-
+        const u = await DB.getUser(userId); const t = await DB.getUser(targetId);
         if (t.wallet < 500) throw new Error("Hedefin cüzdanı boş sayılır.");
-        if (u.wallet < 500) throw new Error("Soygun için en az 500 MC risk etmelisin.");
+        if (u.wallet < 500) throw new Error("Risk almak için cüzdanında en az 500 MC olmalı.");
 
         await DB.setCooldown(userId, "rob", COOLDOWNS.rob);
-        const success = randint(1, 100) <= 35;
-        
-        if (success) {
+        if (randint(1, 100) <= 35) {
             const stolen = Math.floor(t.wallet * (randint(10, 30) / 100));
             t.wallet -= stolen; u.wallet += stolen;
             updateStat(u, "rob_success", 1);
@@ -646,222 +817,180 @@ async function processRob(userId, targetId) {
             return { ok: true, amount: stolen };
         } else {
             const fine = Math.floor(u.wallet * 0.20);
-            u.wallet -= fine;
-            updateStat(u, "rob_fails", 1);
-            await DB.saveUser(userId, u);
-            return { ok: false, fine };
+            u.wallet -= fine; updateStat(u, "rob_fails", 1);
+            await DB.saveUser(userId, u); return { ok: false, fine };
         }
     } finally { DB.releaseLock(userId); DB.releaseLock(targetId); }
 }
 
 async function processGamble(userId, type, betStr, extra) {
-    const bet = validateAmount(betStr);
+    const bet = validateAmount(betStr, true) === "all" ? "all" : validateAmount(betStr);
     const maxBet = type === "slots" ? Number(MAX_SLOTS_AMOUNT) : Number(MAX_COINFLIP_AMOUNT);
-    if (bet > maxBet) throw new Error(`Maksimum bahis: ${fmt(maxBet)}`);
     
     await DB.acquireLock(userId);
     try {
         const u = await DB.getUser(userId);
-        if (u.wallet < bet) throw new Error("Yetersiz cüzdan bakiyesi.");
+        let finalBet = bet === "all" ? u.wallet : bet;
+        if (finalBet > maxBet) finalBet = maxBet; // Max cap auto-enforce
+        if (u.wallet < finalBet || finalBet <= 0) throw new Error("Yetersiz cüzdan bakiyesi.");
         
         let win = false, grossWin = 0, eventData = {};
-        
         if (type === "coinflip") {
             updateStat(u, "coinflip_plays", 1);
             const flip = randint(0, 1) === 0 ? "heads" : "tails";
             eventData.flip = flip;
-            if (flip === extra) { win = true; grossWin = bet * 2; }
+            if (flip === extra) { win = true; grossWin = finalBet * 2; }
         } 
         else if (type === "slots") {
             updateStat(u, "slots_plays", 1);
-            const symbols = ["🍒", "💎", "🍀", "7️⃣", "⭐"];
-            const a = symbols[randint(0, 4)], b = symbols[randint(0, 4)], c = symbols[randint(0, 4)];
+            const s = ["🍒", "💎", "🍀", "7️⃣", "⭐"];
+            const a = s[randint(0,4)], b = s[randint(0,4)], c = s[randint(0,4)];
             eventData.reels = [a, b, c];
             if (a === b && b === c) {
-                const table = { "🍒": 3, "⭐": 4, "🍀": 5, "💎": 7, "7️⃣": 15 };
-                grossWin = Math.floor(bet * (table[a] || 3)); win = true;
+                const t = { "🍒": 3, "⭐": 4, "🍀": 5, "💎": 7, "7️⃣": 15 };
+                grossWin = Math.floor(finalBet * (t[a] || 3)); win = true;
             } else if (a === b || b === c || a === c) {
-                grossWin = Math.floor(bet * 1.5); win = true;
+                grossWin = Math.floor(finalBet * 1.5); win = true;
             }
         }
 
         if (win) {
-            const netWin = grossWin - bet;
-            const { amount: taxedNetWin, tax } = applyTax(netWin, "gamble");
+            const netWin = grossWin - finalBet;
+            const { amount: taxedNetWin, tax } = applyTax(netWin, "gamble", u);
             u.wallet += taxedNetWin;
             updateStat(u, "largest_win", taxedNetWin, true);
             updateStat(u, "total_earned", taxedNetWin);
-            eventData.netWin = taxedNetWin;
-            eventData.tax = tax;
+            eventData.netWin = taxedNetWin; eventData.tax = tax;
         } else {
-            u.wallet -= bet;
-            updateStat(u, "largest_loss", bet, true);
-            updateStat(u, "total_lost", bet);
+            u.wallet -= finalBet;
+            updateStat(u, "largest_loss", finalBet, true);
+            updateStat(u, "total_lost", finalBet);
         }
-        
         await DB.saveUser(userId, u);
-        return { win, ...eventData, bet };
+        return { win, ...eventData, bet: finalBet };
     } finally { DB.releaseLock(userId); }
 }
 
 // ============================================================================
-// 10. CRATES, INVENTORY & SHOP
+// 20. COOLDOWN SYSTEMS (Abstracted above)
 // ============================================================================
 
-async function buyItemOrCrate(userId, name, countStr) {
-    const count = validateAmount(countStr);
-    await DB.acquireLock(userId);
-    try {
-        const u = await DB.getUser(userId);
-        
-        if (CRATES[name]) {
-            const total = CRATES[name].price * count;
-            if (u.wallet < total) throw new Error(`Yetersiz bakiye. Gerekli: ${fmt(total)}`);
-            u.wallet -= total;
-            await addItem(userId, `${name} crate`, count);
-            await DB.saveUser(userId, u);
-            return { type: "crate", total, count, name };
-        }
-        
-        const rItem = Object.keys(SHOP_ITEMS).find(k => k.toLowerCase() === name.toLowerCase());
-        if (rItem) {
-            const total = SHOP_ITEMS[rItem].price * count;
-            if (u.wallet < total) throw new Error(`Yetersiz bakiye. Gerekli: ${fmt(total)}`);
-            u.wallet -= total;
-            await addItem(userId, rItem, count);
-            await DB.saveUser(userId, u);
-            return { type: "item", total, count, name: rItem };
-        }
-        throw new Error("Mağazada bulunamadı.");
-    } finally { DB.releaseLock(userId); }
-}
+// ============================================================================
+// 21. LEADERBOARDS
+// ============================================================================
+// Logic handled in interaction directly for dynamic fetch
 
-async function openCrates(userId, type, countStr) {
-    const count = validateAmount(countStr);
-    if (!CRATES[type]) throw new Error("Bilinmeyen kasa.");
-    
-    await DB.acquireLock(userId);
-    try {
-        const ok = await removeItem(userId, `${type} crate`, count);
-        if (!ok) throw new Error("Envanterinde yeterli kasa yok.");
-        
-        const results = [];
-        let totalCoins = 0;
-        for (let i = 0; i < count; i++) {
-            const roll = choiceWeighted(CRATES[type].loot);
-            if (roll.type === "coins") {
-                const amt = randint(roll.min, roll.max);
-                totalCoins += amt; results.push({ type: "coins", amount: amt });
-            } else {
-                const qty = randint(roll.min, roll.max);
-                await addItem(userId, roll.item, qty);
-                results.push({ type: "item", item: roll.item, qty });
-            }
-        }
-        
-        const u = await DB.getUser(userId);
-        if (totalCoins > 0) u.wallet += totalCoins;
-        updateStat(u, "crates_opened", count);
-        addXP(u, count * 10); // Kilitlenme çözüldü (saveUser'dan önceye alındı)
-        
-        await DB.saveUser(userId, u);
-        return { totalCoins, results };
-    } finally { DB.releaseLock(userId); }
-}
+// ============================================================================
+// 22. PROFILE / STATS (Formatting helpers)
+// ============================================================================
 
-async function sellItems(userId, item, qtyStr) {
-    const qty = validateAmount(qtyStr);
-    const rItem = Object.keys(SELL_VALUES).find(k => k.toLowerCase() === item.toLowerCase());
-    if (!rItem) throw new Error("Bu eşya satılamaz.");
-    
-    await DB.acquireLock(userId);
-    try {
-        const ok = await removeItem(userId, rItem, qty);
-        if (!ok) throw new Error("Envanterde yeterli yok.");
-        
-        const gain = SELL_VALUES[rItem] * qty;
-        const u = await DB.getUser(userId);
-        u.wallet += gain;
-        updateStat(u, "items_sold", qty);
-        await DB.saveUser(userId, u);
-        return gain;
-    } finally { DB.releaseLock(userId); }
+// ============================================================================
+// 23. ADMIN / AUDIT / OWNER TOOLS
+// ============================================================================
+async function writeAuditLog(adminId, action, targetId, details) {
+    if (ENABLE_AUDIT_LOGS !== "true") return;
+    await DB.addAuditLog({ id: generateId(), adminId, action, targetId, details, time: nowSec() });
 }
 
 // ============================================================================
-// 11. SLASH COMMAND BUILDERS
+// 24. SLASH COMMAND BUILDERS
 // ============================================================================
 const commands = [
     new SlashCommandBuilder().setName("help").setDescription("MetaCoin REBORN komut yardım listesi"),
-    new SlashCommandBuilder().setName("balance").setDescription("Cüzdan ve banka bakiyeni gösterir.").addUserOption(o => o.setName("kullanici").setDescription("Birini kontrol et")),
+    new SlashCommandBuilder().setName("balance").setDescription("Cüzdan, banka ve net değerinizi gösterir.").addUserOption(o => o.setName("kullanici").setDescription("Kimin?")),
     new SlashCommandBuilder().setName("deposit").setDescription("Bankaya para yatır.").addStringOption(o => o.setName("miktar").setDescription("Sayı veya 'all'").setRequired(true)),
     new SlashCommandBuilder().setName("withdraw").setDescription("Bankadan para çek.").addStringOption(o => o.setName("miktar").setDescription("Sayı veya 'all'").setRequired(true)),
-    new SlashCommandBuilder().setName("pay").setDescription("Birine para gönder (Vergi kesilebilir).").addUserOption(o => o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o => o.setName("miktar").setDescription("Miktar").setRequired(true)),
-    new SlashCommandBuilder().setName("daily").setDescription("Günlük ödül (Seri bonuslu)."),
-    new SlashCommandBuilder().setName("work").setDescription(`Çalış ve para kazan (${WORK_COOLDOWN_MINUTES} dk).`),
+    new SlashCommandBuilder().setName("pay").setDescription("Birine para gönder.").addUserOption(o => o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o => o.setName("miktar").setDescription("Miktar veya 'all'").setRequired(true)),
+    new SlashCommandBuilder().setName("daily").setDescription("Günlük ödül."),
+    new SlashCommandBuilder().setName("work").setDescription(`Çalış (${WORK_COOLDOWN_MINUTES} dk).`),
     new SlashCommandBuilder().setName("beg").setDescription(`Dilencilik (${BEG_COOLDOWN_MINUTES} dk).`),
-    new SlashCommandBuilder().setName("crime").setDescription(`Suç işle riskli (${CRIME_COOLDOWN_MINUTES} dk).`),
-    new SlashCommandBuilder().setName("rob").setDescription(`Soygun yap riskli (${ROB_COOLDOWN_MINUTES} dk).`).addUserOption(o => o.setName("hedef").setRequired(true).setDescription("Kurban")),
-    new SlashCommandBuilder().setName("bet").setDescription("Yazı tura (coinflip).").addStringOption(o => o.setName("taraf").setRequired(true).setDescription("heads/tails").addChoices({name:"heads",value:"heads"},{name:"tails",value:"tails"})).addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Bahis miktarı")),
-    new SlashCommandBuilder().setName("slots").setDescription("Slot makinesi.").addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Bahis miktarı")),
-    new SlashCommandBuilder().setName("shop").setDescription("Mağazayı görüntüle.").addStringOption(o => o.setName("kategori").setDescription("Ne mağazası?").addChoices({name:"crates",value:"crates"},{name:"items",value:"items"})),
-    new SlashCommandBuilder().setName("buy").setDescription("Eşya veya kasa satın al.").addStringOption(o => o.setName("urun").setRequired(true).setDescription("Adı")).addStringOption(o => o.setName("adet").setRequired(true).setDescription("Kaç tane?")),
-    new SlashCommandBuilder().setName("inventory").setDescription("Envanterini göster.").addUserOption(o => o.setName("kullanici").setDescription("Kimin?")),
-    new SlashCommandBuilder().setName("open").setDescription("Kasa aç.").addStringOption(o => o.setName("kasa").setRequired(true).setDescription("basic/rare/epic/legendary").addChoices({name:"basic",value:"basic"},{name:"rare",value:"rare"},{name:"epic",value:"epic"},{name:"legendary",value:"legendary"})).addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet")),
-    new SlashCommandBuilder().setName("sell").setDescription("Eşya sat.").addStringOption(o => o.setName("esya").setRequired(true).setDescription("Adı")).addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet")),
-    new SlashCommandBuilder().setName("leaderboard").setDescription("Liderlik tablosu").addStringOption(o => o.setName("tur").setRequired(true).setDescription("Sıralama türü").addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"},{name:"networth",value:"networth"})),
-    new SlashCommandBuilder().setName("cooldowns").setDescription("Bekleme sürelerini göster."),
-    new SlashCommandBuilder().setName("rank").setDescription("Sıralamanı gör."),
-    new SlashCommandBuilder().setName("crateinfo").setDescription("Kasa içerik ve oranları."),
+    new SlashCommandBuilder().setName("crime").setDescription(`Suç işle (${CRIME_COOLDOWN_MINUTES} dk).`),
+    new SlashCommandBuilder().setName("rob").setDescription(`Soygun yap (${ROB_COOLDOWN_MINUTES} dk).`).addUserOption(o => o.setName("hedef").setRequired(true).setDescription("Kurban")),
+    new SlashCommandBuilder().setName("bet").setDescription("Yazı tura.").addStringOption(o => o.setName("taraf").setRequired(true).setDescription("heads/tails").addChoices({name:"heads",value:"heads"},{name:"tails",value:"tails"})).addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar veya 'all'")),
+    new SlashCommandBuilder().setName("slots").setDescription("Slot makinesi.").addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar veya 'all'")),
+    new SlashCommandBuilder().setName("shop").setDescription("Mağazayı görüntüle.").addStringOption(o => o.setName("kategori").setDescription("crates/items").addChoices({name:"crates",value:"crates"},{name:"items",value:"items"})),
+    new SlashCommandBuilder().setName("buy").setDescription("Satın al.").addStringOption(o => o.setName("urun").setRequired(true).setDescription("Adı")).addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet veya 'all'")),
+    new SlashCommandBuilder().setName("inventory").setDescription("Envanter.").addUserOption(o => o.setName("kullanici").setDescription("Kimin?")),
+    new SlashCommandBuilder().setName("open").setDescription("Kasa aç.").addStringOption(o => o.setName("kasa").setRequired(true).setDescription("basic/rare/epic/legendary").addChoices({name:"basic",value:"basic"},{name:"rare",value:"rare"},{name:"epic",value:"epic"},{name:"legendary",value:"legendary"})).addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet veya 'all'")),
+    new SlashCommandBuilder().setName("sell").setDescription("Eşya sat.").addStringOption(o => o.setName("esya").setRequired(true).setDescription("Adı")).addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet veya 'all'")),
+    new SlashCommandBuilder().setName("sellall").setDescription("Satılabilir tüm eşyaları satar."),
+    new SlashCommandBuilder().setName("leaderboard").setDescription("Liderlik tablosu").addStringOption(o => o.setName("tur").setRequired(true).addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"},{name:"networth",value:"networth"})),
+    new SlashCommandBuilder().setName("cooldowns").setDescription("Bekleme süreleri."),
+    new SlashCommandBuilder().setName("rank").setDescription("Sıralaman."),
+    new SlashCommandBuilder().setName("crateinfo").setDescription("Kasa içerikleri."),
+    new SlashCommandBuilder().setName("tax").setDescription("Güncel vergi oranları."),
+    new SlashCommandBuilder().setName("stats").setDescription("İstatistikler.").addUserOption(o => o.setName("kullanici").setDescription("Kimin?")),
+    new SlashCommandBuilder().setName("finance").setDescription("Bütünsel finansal durum özeti."),
     
     // Bank System
     new SlashCommandBuilder().setName("bank").setDescription("Banka işlemleri")
         .addSubcommand(s => s.setName("upgrade").setDescription("Kapasite artır."))
-        .addSubcommand(s => s.setName("interest").setDescription("Faiz oranlarını ve durumu gör."))
-        .addSubcommand(s => s.setName("statement").setDescription("Son işlemleri (Transaction) gösterir.")),
+        .addSubcommand(s => s.setName("interest").setDescription("Faiz durumunu gör."))
+        .addSubcommand(s => s.setName("depositall").setDescription("Tüm parayı yatır."))
+        .addSubcommand(s => s.setName("withdrawall").setDescription("Tüm parayı çek."))
+        .addSubcommand(s => s.setName("statement").setDescription("Son işlemleri gösterir.")),
         
     // Loan System
     new SlashCommandBuilder().setName("loan").setDescription("Kredi sistemi")
         .addSubcommand(s => s.setName("take").setDescription("Kredi çek.").addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar")))
         .addSubcommand(s => s.setName("repay").setDescription("Kredi öde.").addStringOption(o => o.setName("id").setRequired(true).setDescription("Kredi ID")).addStringOption(o=> o.setName("miktar").setRequired(true).setDescription("Miktar veya 'all'")))
-        .addSubcommand(s => s.setName("list").setDescription("Aktif kredilerini gör.")),
+        .addSubcommand(s => s.setName("list").setDescription("Aktif kredilerini gör."))
+        .addSubcommand(s => s.setName("info").setDescription("Kredi skoru ve limit bilgilerini gör.")),
 
     // Investment System
-    new SlashCommandBuilder().setName("investment").setDescription("Yatırım / Vadeli Hesap")
+    new SlashCommandBuilder().setName("investment").setDescription("Yatırım / Vadeli")
         .addSubcommand(s => s.setName("create").setDescription("Yatırım yap.").addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar")).addStringOption(o=> o.setName("gun").setRequired(true).setDescription("Vade (1-30)")))
         .addSubcommand(s => s.setName("claim").setDescription("Vadesi dolan yatırımı çek.").addStringOption(o => o.setName("id").setRequired(true).setDescription("Yatırım ID")))
-        .addSubcommand(s => s.setName("break").setDescription("Yatırımı cezalı erken boz.").addStringOption(o => o.setName("id").setRequired(true).setDescription("Yatırım ID")))
+        .addSubcommand(s => s.setName("break").setDescription("Cezalı erken boz.").addStringOption(o => o.setName("id").setRequired(true).setDescription("Yatırım ID")))
         .addSubcommand(s => s.setName("list").setDescription("Yatırımlarını gör.")),
 
-    new SlashCommandBuilder().setName("tax").setDescription("Güncel vergi oranlarını gösterir."),
-    new SlashCommandBuilder().setName("stats").setDescription("Detaylı istatistikler.").addUserOption(o => o.setName("kullanici").setDescription("Kimin?")),
-    new SlashCommandBuilder().setName("profile").setDescription("Profil").addSubcommand(s=> s.setName("view").setDescription("Profil gör").addUserOption(o=> o.setName("kullanici").setDescription("Kimin?"))).addSubcommand(s=> s.setName("setbio").setDescription("Bio ayarla").addStringOption(o=> o.setName("metin").setRequired(true).setDescription("Metin"))),
+    // Profile System
+    new SlashCommandBuilder().setName("profile").setDescription("Profil")
+        .addSubcommand(s=> s.setName("view").setDescription("Profil gör").addUserOption(o=> o.setName("kullanici").setDescription("Kimin?")))
+        .addSubcommand(s=> s.setName("setbio").setDescription("Bio ayarla").addStringOption(o=> o.setName("metin").setRequired(true).setDescription("Metin"))),
+    
+    // Top System
     new SlashCommandBuilder().setName("top").setDescription("Gelişmiş Top")
-        .addSubcommand(s => s.setName("crates").setDescription("En çok kasa açanlar")).addSubcommand(s => s.setName("gamblers").setDescription("En çok kumar oynayanlar")).addSubcommand(s => s.setName("richest").setDescription("En zenginler (Networth)")).addSubcommand(s => s.setName("level").setDescription("En yüksek leveller"))
-];
+        .addSubcommand(s => s.setName("crates").setDescription("En çok kasa açanlar")).addSubcommand(s => s.setName("gamblers").setDescription("En çok kumar oynayanlar"))
+        .addSubcommand(s => s.setName("richest").setDescription("En zenginler (Networth)")).addSubcommand(s => s.setName("level").setDescription("En yüksek leveller"))
+        .addSubcommand(s => s.setName("wallet").setDescription("Sadece cüzdan")).addSubcommand(s => s.setName("bank").setDescription("Sadece banka")),
 
+    // Admin System
+    new SlashCommandBuilder().setName("admin").setDescription("Yönetici Komutları")
+        .addSubcommand(s=> s.setName("addcoins").setDescription("Para ver").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
+        .addSubcommand(s=> s.setName("removecoins").setDescription("Para sil").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
+        .addSubcommand(s=> s.setName("setcoins").setDescription("Para ayarla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
+        .addSubcommand(s=> s.setName("additem").setDescription("Eşya ver").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("esya").setRequired(true).setDescription("Ne")).addIntegerOption(o=>o.setName("adet").setRequired(true).setDescription("Kaç")))
+        .addSubcommand(s=> s.setName("removeitem").setDescription("Eşya al").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("esya").setRequired(true).setDescription("Ne")).addIntegerOption(o=>o.setName("adet").setRequired(true).setDescription("Kaç")))
+        .addSubcommand(s=> s.setName("setlevel").setDescription("Level ayarla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addIntegerOption(o=>o.setName("level").setRequired(true).setDescription("Level")))
+        .addSubcommand(s=> s.setName("resetcooldown").setDescription("Bekleme süresi sıfırla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("komut").setRequired(true).setDescription("Komut adı")))
+        .addSubcommand(s=> s.setName("blacklist").setDescription("Kullanıcı kara liste").addStringOption(o=>o.setName("islem").setRequired(true).addChoices({name:"add",value:"add"},{name:"remove",value:"remove"})).addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")))
+        .addSubcommand(s=> s.setName("freeze").setDescription("Ekonomiyi dondur").addBooleanOption(o=>o.setName("durum").setRequired(true).setDescription("True: Dondur, False: Aç")))
+        .addSubcommand(s=> s.setName("userinfo").setDescription("Ham data gör").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")))
+        .addSubcommand(s=> s.setName("economyinfo").setDescription("Sistem analizi"))
+];
 const allSlashJSON = commands.map(c => c.toJSON());
 
 // ============================================================================
-// 12. INTERACTION HANDLERS
+// 25. INTERACTION ROUTER / HANDLERS
 // ============================================================================
 const handlers = {
     help: async (i) => {
-        const e = embedBase().setTitle("MetaCoin REBORN • Sistem Rehberi")
-            .setDescription("Gelişmiş ekonomi, finans, yatırım ve yetenek modülleri aktiftir.")
+        const e = embedBase().setTitle("MetaCoin REBORN • Gelişmiş Sistem Rehberi")
+            .setDescription("Economy v1.0.0 — Kapsamlı finans ve bankacılık hizmetinizde.")
             .addFields(
-                { name: "🏦 Finans & Banka", value: "`/balance`, `/deposit`, `/withdraw`, `/pay`, `/bank upgrade`, `/bank interest`, `/bank statement`, `/tax`" },
-                { name: "📈 Kredi & Yatırım", value: "`/loan take`, `/loan repay`, `/loan list`\n`/investment create`, `/investment claim`, `/investment break`" },
+                { name: "🏦 Finans", value: "`/balance`, `/deposit`, `/withdraw`, `/pay`, `/bank upgrade`, `/bank interest`, `/finance`" },
+                { name: "📈 Kredi & Yatırım", value: "`/loan take`, `/loan repay`, `/loan list`, `/loan info`\n`/investment create`, `/investment claim`, `/investment break`" },
                 { name: "🛠️ İş & Gelir", value: "`/daily`, `/work`, `/beg`, `/crime`, `/rob`" },
                 { name: "🎲 Kumar", value: "`/bet`, `/slots`" },
-                { name: "📦 Eşya & Kasa", value: "`/shop`, `/buy`, `/open`, `/inventory`, `/sell`, `/crateinfo`" },
-                { name: "🏆 Rekabet & Profil", value: "`/leaderboard`, `/top`, `/profile view`, `/stats`, `/rank`, `/cooldowns`" }
+                { name: "📦 Ticaret", value: "`/shop`, `/buy`, `/open`, `/inventory`, `/sell`, `/sellall`" },
+                { name: "🏆 Sosyal", value: "`/leaderboard`, `/top`, `/profile view`, `/stats`, `/rank`, `/cooldowns`" }
             );
-        await i.reply({ embeds: [e] });
+        await replySafe(i, { embeds: [e] });
     },
     balance: async (i) => {
         const target = i.options.getUser("kullanici") || i.user;
-        const u = await DB.getUser(target.id);
+        const u = await getUserWithInterest(target.id);
         const net = await getNetworth(target.id);
         const e = embedBase().setTitle(`Bakiye — ${target.username}`).setThumbnail(target.displayAvatarURL())
             .addFields(
@@ -869,84 +998,99 @@ const handlers = {
                 { name: "Banka", value: `${fmt(u.bank)} / ${fmt(u.bank_max)}`, inline: true },
                 { name: "Net Değer", value: fmt(net), inline: true }
             );
-        await i.reply({ embeds: [e] });
+        await replySafe(i, { embeds: [e] });
+    },
+    finance: async (i) => {
+        const u = await getUserWithInterest(i.user.id);
+        const loans = await DB.getLoans(i.user.id);
+        const invs = await DB.getInvestments(i.user.id);
+        const debt = loans.reduce((acc, l) => acc + l.total_due, 0);
+        const pendingInv = invs.reduce((acc, l) => acc + l.return_amount, 0);
+        const net = await getNetworth(i.user.id);
+        const e = embedBase(THEME.finance).setTitle(`Bütünsel Finans — ${i.user.username}`).setThumbnail(i.user.displayAvatarURL())
+            .addFields(
+                { name: "Likidite", value: `Cüzdan: ${fmt(u.wallet)}\nBanka: ${fmt(u.bank)}`, inline: true },
+                { name: "Varlık", value: `Networth: ${fmt(net)}\nKredi Puanı: ${u.credit_score}`, inline: true },
+                { name: "Borç / Alacak", value: `Aktif Borç: ${fmt(debt)} (${loans.length} Kredi)\nBekleyen Yatırım: ${fmt(pendingInv)} (${invs.length})`, inline: true },
+                { name: "Vergi & Faiz Analizi", value: `Ödenen Toplam Vergi: ${fmt(u.total_taxes_paid || 0)}\nKazanılan Pasif Faiz: ${fmt(u.total_interest_earned || 0)}` }
+            );
+        await replySafe(i, { embeds: [e] });
     },
     deposit: async (i) => {
         const placed = await processDeposit(i.user.id, i.options.getString("miktar"));
-        await i.reply({ embeds: [embedBase(THEME.success).setDescription(`✅ Bankaya **${fmt(placed)}** yatırıldı.`)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ Bankaya **${fmt(placed)}** yatırıldı.`)] });
     },
     withdraw: async (i) => {
         const { net, tax, total } = await processWithdraw(i.user.id, i.options.getString("miktar"));
-        let desc = `✅ Bankadan başarıyla **${fmt(total)}** çekildi.`;
-        if (tax > 0) desc += `\n*Vergi Kestintisi: ${fmt(tax)} (Ele geçen: ${fmt(net)})*`;
-        await i.reply({ embeds: [embedBase(THEME.success).setDescription(desc)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ Bankadan **${fmt(total)}** çekildi.\n*Vergi: ${fmt(tax)} (Ele geçen: ${fmt(net)})*`)] });
     },
     pay: async (i) => {
         const target = i.options.getUser("hedef");
         if (target.bot) throw new Error("Botlara para atamazsın.");
         const { net, tax, total } = await processTransfer(i.user.id, target.id, i.options.getString("miktar"));
-        let desc = `💸 **${target.username}** adlı kullanıcıya **${fmt(net)}** ulaştı.`;
-        if (tax > 0) desc += ` *(Gönderilen: ${fmt(total)}, Vergi: ${fmt(tax)})*`;
-        await i.reply({ embeds: [embedBase(THEME.success).setDescription(desc)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💸 **${target.username}** adlı kullanıcıya **${fmt(net)}** ulaştı.\n*(Gönderilen: ${fmt(total)}, Vergi: ${fmt(tax)})*`)] });
     },
     daily: async (i) => {
         const r = await doAction(i.user.id, "daily");
-        if (!r.ok) return i.reply({ flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
-        await i.reply({ embeds: [embedBase(THEME.success).setTitle("🎁 Günlük Ödül").setDescription(`Kazanılan: **${fmt(r.earned)}**\n🔥 Seri: **${r.streak} Gün**`)] });
+        if (!r.ok) return replySafe(i, { flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setTitle("🎁 Günlük Ödül").setDescription(`Kazanılan: **${fmt(r.earned)}**\n🔥 Seri: **${r.streak} Gün**`)] });
     },
     work: async (i) => {
         const r = await doAction(i.user.id, "work");
-        if (!r.ok) return i.reply({ flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
-        await i.reply({ embeds: [embedBase(THEME.success).setDescription(`🛠️ **${r.event}**. Maaş: **${fmt(r.earned)}**\n🌟 *+15 XP*`)] });
+        if (!r.ok) return replySafe(i, { flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🛠️ **${r.event}**. Maaş: **${fmt(r.earned)}**\n🌟 *+15 XP*`)] });
     },
     beg: async (i) => {
         const r = await doAction(i.user.id, "beg");
-        if (!r.ok && r.left) return i.reply({ flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
-        if (!r.ok) return i.reply({ content: `🤷 ${r.event}` });
-        await i.reply({ content: `🙏 Yoldan geçen biri **${fmt(r.earned)}** fırlattı.` });
+        if (!r.ok && r.left) return replySafe(i, { flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
+        if (!r.ok) return replySafe(i, { content: `🤷 ${r.event}` });
+        await replySafe(i, { content: `🙏 Yoldan geçen biri **${fmt(r.earned)}** fırlattı.` });
     },
     crime: async (i) => {
         const r = await doAction(i.user.id, "crime");
-        if (!r.ok && r.left) return i.reply({ flags: MessageFlags.Ephemeral, content: `⏳ Ortalık durulana kadar bekle: **${msToHuman(r.left)}**` });
-        if (r.ok) await i.reply({ embeds: [embedBase(THEME.success).setDescription(`🕶️ Mükemmel bir vurgun! **${fmt(r.earned)}** kaldırdın.\n🌟 *+25 XP*`)] });
-        else await i.reply({ embeds: [embedBase(THEME.error).setDescription(`🚨 Polise yakalandın! Rüşvet: **${fmt(r.riskLost)}**`)] });
+        if (!r.ok && r.left) return replySafe(i, { flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
+        if (r.ok) await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🕶️ Mükemmel bir vurgun! **${fmt(r.earned)}** kaldırdın.\n🌟 *+25 XP*`)] });
+        else await replySafe(i, { embeds: [embedBase(THEME.error).setDescription(`🚨 Polise yakalandın! Rüşvet: **${fmt(r.riskLost)}**`)] });
     },
     rob: async (i) => {
         const target = i.options.getUser("hedef");
         if (target.bot) throw new Error("Botları soyamazsın.");
         const r = await processRob(i.user.id, target.id);
-        if (r.cooldown) return i.reply({ flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
-        if (r.ok) await i.reply({ embeds: [embedBase(THEME.success).setDescription(`🥷 **${target.username}** soyuldu! Ganimet: **${fmt(r.amount)}**`)] });
-        else await i.reply({ embeds: [embedBase(THEME.error).setDescription(`🚨 **${target.username}** polisi aradı! Ceza: **${fmt(r.fine)}**`)] });
+        if (r.cooldown) return replySafe(i, { flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
+        if (r.ok) await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🥷 **${target.username}** soyuldu! Ganimet: **${fmt(r.amount)}**`)] });
+        else await replySafe(i, { embeds: [embedBase(THEME.error).setDescription(`🚨 **${target.username}** polisi aradı! Ceza: **${fmt(r.fine)}**`)] });
     },
     bet: async (i) => {
-        const side = i.options.getString("taraf");
-        const r = await processGamble(i.user.id, "coinflip", i.options.getString("miktar"), side);
-        let desc = `Bahis: **${side}**\nAtılan: **${r.flip}**\n\nSonuç: ${r.win ? `**KAZANDIN!**` : `**KAYBETTİN!** (-${fmt(r.bet)})`}`;
+        const r = await processGamble(i.user.id, "coinflip", i.options.getString("miktar"), i.options.getString("taraf"));
+        let desc = `Bahis: **${i.options.getString("taraf")}**\nAtılan: **${r.flip}**\n\nSonuç: ${r.win ? `**KAZANDIN!**` : `**KAYBETTİN!** (-${fmt(r.bet)})`}`;
         if (r.win) desc += `\nNet Kazanç: **${fmt(r.netWin)}** *(Vergi: ${fmt(r.tax)})*`;
-        await i.reply({ embeds: [embedBase(THEME.gamble).setTitle("🪙 Yazı Tura").setDescription(desc)] });
+        await replySafe(i, { embeds: [embedBase(THEME.gamble).setTitle("🪙 Yazı Tura").setDescription(desc)] });
     },
     slots: async (i) => {
         const r = await processGamble(i.user.id, "slots", i.options.getString("miktar"));
         let desc = `[ ${r.reels.join(" | ")} ]\n\nSonuç: ${r.win ? `**KAZANDIN!**` : `**KAYBETTİN!** (-${fmt(r.bet)})`}`;
         if (r.win) desc += `\nNet Kazanç: **${fmt(r.netWin)}** *(Vergi: ${fmt(r.tax)})*`;
-        await i.reply({ embeds: [embedBase(THEME.gamble).setTitle("🎰 Slot Makinesi").setDescription(desc)] });
+        await replySafe(i, { embeds: [embedBase(THEME.gamble).setTitle("🎰 Slot Makinesi").setDescription(desc)] });
     },
     buy: async (i) => {
         const r = await buyItemOrCrate(i.user.id, i.options.getString("urun"), i.options.getString("adet"));
-        await i.reply({ embeds: [embedBase(THEME.success).setDescription(`🛒 **${r.count}x ${r.name}** başarıyla alındı. Harcanan: **${fmt(r.total)}**`)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🛒 **${r.count}x ${r.name}** başarıyla alındı. Harcanan: **${fmt(r.total)}**`)] });
     },
     open: async (i) => {
         const r = await openCrates(i.user.id, i.options.getString("kasa"), i.options.getString("adet"));
-        let desc = `📦 Başarıyla açıldı!\n\n**Kazanılanlar:**\n`;
+        let desc = `📦 **${r.count}** adet başarıyla açıldı!\n\n**Kazanılanlar:**\n`;
         if (r.totalCoins > 0) desc += `🪙 **${fmt(r.totalCoins)}**\n`;
         const itemMap = {}; r.results.filter(x => x.type === "item").forEach(x => itemMap[x.item] = (itemMap[x.item] || 0) + x.qty);
         for (const [it, q] of Object.entries(itemMap)) desc += `🔹 **${it}**: x${q}\n`;
-        await i.reply({ embeds: [embedBase(THEME.success).setDescription(desc)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(desc)] });
     },
     sell: async (i) => {
-        const gain = await sellItems(i.user.id, i.options.getString("esya"), i.options.getString("adet"));
-        await i.reply({ embeds: [embedBase(THEME.success).setDescription(`💱 Eşyalar başarıyla satıldı. Kazanç: **${fmt(gain)}**`)] });
+        const r = await sellItems(i.user.id, i.options.getString("esya"), i.options.getString("adet"));
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💱 **${r.count}** adet eşya satıldı. Kazanç: **${fmt(r.gain)}**`)] });
+    },
+    sellall: async (i) => {
+        const r = await sellAllProcess(i.user.id);
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💱 Envanterindeki satılabilir tüm eşyaları sattın (${r.totalItems} adet).\nToplam Kazanç: **${fmt(r.totalGain)}**`)] });
     },
     inventory: async (i) => {
         const target = i.options.getUser("kullanici") || i.user;
@@ -957,7 +1101,7 @@ const handlers = {
             { name: "📦 Kasalar", value: crates.join("\n") || "*Kasa yok*", inline: true },
             { name: "🧰 Eşyalar", value: items.join("\n") || "*Eşya yok*", inline: true }
         );
-        await i.reply({ embeds: [e] });
+        await replySafe(i, { embeds: [e] });
     },
     shop: async (i) => {
         const cat = i.options.getString("kategori") || "crates";
@@ -969,7 +1113,7 @@ const handlers = {
             e.setTitle("🛒 Mağaza — Eşyalar").setDescription("`/buy urun:<isim> adet:<n>`");
             for (const [k, v] of Object.entries(SHOP_ITEMS)) e.addFields({ name: `🔧 ${k}`, value: `Fiyat: ${fmt(v.price)}\n*${v.desc}*` });
         }
-        await i.reply({ embeds: [e] });
+        await replySafe(i, { embeds: [e] });
     },
     crateinfo: async (i) => {
         const e = embedBase().setTitle("ℹ️ Kasa Oranları");
@@ -977,7 +1121,7 @@ const handlers = {
             const str = v.loot.map(l => l.type === "coins" ? `🪙 Para (${fmt(l.min)}-${fmt(l.max)}) [%${l.weight}]` : `🔹 ${l.item} (${l.min}-${l.max}) [%${l.weight}]`).join("\n");
             e.addFields({ name: `📦 ${k} (${fmt(v.price)})`, value: str });
         }
-        await i.reply({ embeds: [e] });
+        await replySafe(i, { embeds: [e] });
     },
     tax: async (i) => {
         const e = embedBase(THEME.finance).setTitle("⚖️ Güncel Vergi Oranları")
@@ -985,9 +1129,9 @@ const handlers = {
             .addFields(
                 { name: "Para Transferi (Pay)", value: `%${(Number(TAX_RATE_TRANSFER)*100).toFixed(1)}`, inline: true },
                 { name: "Bankadan Çekim (Withdraw)", value: `%${(Number(TAX_RATE_WITHDRAW)*100).toFixed(1)}`, inline: true },
-                { name: "Kumar Kazançları (Bet/Slots)", value: `%${(Number(TAX_RATE_GAMBLING_WIN)*100).toFixed(1)}`, inline: true }
+                { name: "Kumar Kazançları", value: `%${(Number(TAX_RATE_GAMBLING_WIN)*100).toFixed(1)}`, inline: true }
             );
-        await i.reply({ embeds: [e] });
+        await replySafe(i, { embeds: [e] });
     },
     bank: async (i) => {
         const sub = i.options.getSubcommand();
@@ -999,62 +1143,85 @@ const handlers = {
                 if (u.wallet < cost) throw new Error(`Banka kapasitesi artırımı için ${fmt(cost)} gerekli.`);
                 u.wallet -= cost; u.bank_max += 25000;
                 await DB.saveUser(i.user.id, u);
-                await i.reply({ embeds: [embedBase(THEME.success).setDescription(`🏦 Kapasite artırıldı! Yeni sınır: **${fmt(u.bank_max)}**`)] });
+                await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🏦 Kapasite artırıldı! Yeni sınır: **${fmt(u.bank_max)}**`)] });
             } finally { DB.releaseLock(i.user.id); }
         } 
         else if (sub === "interest") {
+            const u = await getUserWithInterest(i.user.id); // Triggers lazy eval
             const e = embedBase(THEME.finance).setTitle("🏦 Faiz Sistemi").addFields(
-                { name: "Tasarruf Faizi Oranı", value: `%${(Number(INTEREST_RATE_SAVINGS)*100).toFixed(1)} / Periyot`, inline: true },
+                { name: "Faiz Oranı", value: `%${(Number(INTEREST_RATE_SAVINGS)*100).toFixed(1)} / Periyot`, inline: true },
                 { name: "Faiz Periyodu", value: `${INTEREST_INTERVAL_HOURS} Saat`, inline: true },
-                { name: "Maksimum Getiri Sınırı", value: `Kapasitenin %${(Number(INTEREST_CAP_MULTIPLIER)*100)}'i`, inline: true },
-                { name: "Nasıl Çalışır?", value: "Bankanızdaki para otomatik olarak faiz kazanır (Güncelleme bekleniyor)." }
+                { name: "Max Birikim Limiti", value: `${INTEREST_MAX_IDLE_HOURS} Saat`, inline: true },
+                { name: "Senin Durumun", value: `Şu ana kadar pasif faizden **${fmt(u.total_interest_earned || 0)}** kazandın.\nBankanda faiz işlemesi için min **${fmt(INTEREST_MIN_BALANCE)}** olmalıdır. Sen paranı kullandıkça faiz hesaplanır.` }
             );
-            await i.reply({ embeds: [e] });
+            await replySafe(i, { embeds: [e] });
         }
         else if (sub === "statement") {
             const txs = await DB.getCollection(i.user.id, "transactions");
             if (!txs.length) throw new Error("Henüz hiçbir işleminiz bulunmuyor.");
             txs.sort((a,b) => b.timestamp - a.timestamp);
-            const lines = txs.slice(0, 10).map(t => {
-                const dt = new Date(t.timestamp * 1000).toLocaleString("tr-TR");
-                return `\`[${dt}]\` **${t.type.toUpperCase()}** - ${fmt(t.amount)}`;
-            }).join("\n");
-            await i.reply({ embeds: [embedBase(THEME.finance).setTitle("📄 Son 10 İşlem").setDescription(lines)] });
+            const lines = txs.slice(0, 15).map(t => `\`[${new Date(t.timestamp * 1000).toLocaleString("tr-TR")}]\` **${t.type.toUpperCase()}** - ${fmt(t.amount)}`).join("\n");
+            await replySafe(i, { embeds: [embedBase(THEME.finance).setTitle("📄 Son 15 İşlem").setDescription(lines)] });
+        }
+        else if (sub === "depositall") {
+            const placed = await processDeposit(i.user.id, "all");
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ Bankaya **${fmt(placed)}** yatırıldı.`)] });
+        }
+        else if (sub === "withdrawall") {
+            const { net, tax, total } = await processWithdraw(i.user.id, "all");
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ Bankadan **${fmt(total)}** çekildi.\n*Vergi: ${fmt(tax)} (Ele geçen: ${fmt(net)})*`)] });
         }
     },
     loan: async (i) => {
         const sub = i.options.getSubcommand();
         if (sub === "take") {
             const loan = await takeLoan(i.user.id, i.options.getString("miktar"));
-            await i.reply({ embeds: [embedBase(THEME.success).setDescription(`💳 Kredi onaylandı!\n\n**Çekilen:** ${fmt(loan.amount)}\n**Toplam Geri Ödenecek:** ${fmt(loan.total_due)}\n**ID:** \`${loan.id}\``)] });
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💳 Kredi onaylandı!\n\n**Çekilen:** ${fmt(loan.amount)}\n**Toplam Geri Ödenecek:** ${fmt(loan.total_due)}\n**Son Ödeme:** <t:${loan.due_date}:d>\n**ID:** \`${loan.id}\``)] });
         } else if (sub === "repay") {
             const r = await repayLoan(i.user.id, i.options.getString("id"), i.options.getString("miktar"));
-            await i.reply({ embeds: [embedBase(THEME.success).setDescription(`💳 Kredi ödemesi alındı!\n\n**Ödenen:** ${fmt(r.paid)}\n**Kalan Borç:** ${fmt(r.left)}\n${r.cleared ? '✅ **Borç Kapandı!** (Kredi Puanı arttı)' : ''}`)] });
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💳 Kredi ödemesi alındı!\n\n**Ödenen:** ${fmt(r.paid)}\n**Kalan Borç:** ${fmt(r.left)}\n${r.cleared ? '✅ **Borç Kapandı!**' : ''}`)] });
         } else if (sub === "list") {
+            const u = await DB.getUser(i.user.id);
             const loans = await DB.getLoans(i.user.id);
+            checkLoanPenalties(u, loans); // Lazy penalty eval
             if (!loans.length) throw new Error("Aktif kredin bulunmuyor.");
             const e = embedBase(THEME.finance).setTitle("💳 Aktif Krediler");
-            for(let l of loans) e.addFields({name: `ID: ${l.id}`, value: `**Borç:** ${fmt(l.total_due)}\n**Alınma:** <t:${l.taken_at}:d>`, inline: false});
-            await i.reply({ embeds: [e] });
+            for(let l of loans) e.addFields({name: `ID: ${l.id} ${l.is_penalized ? '⚠️ CEZALI' : ''}`, value: `**Borç:** ${fmt(l.total_due)}\n**Son Ödeme:** <t:${l.due_date}:R>`, inline: false});
+            await replySafe(i, { embeds: [e] });
+        } else if (sub === "info") {
+            const u = await DB.getUser(i.user.id);
+            const networth = await getNetworth(i.user.id);
+            const limit = (u.level * 5000) + (networth * 0.1) + (u.credit_score * 100);
+            const loans = await DB.getLoans(i.user.id);
+            const debt = loans.reduce((a, l) => a + l.total_due, 0);
+            const e = embedBase(THEME.finance).setTitle("💳 Kredi Skoru & Limit").addFields(
+                { name: "Kredi Puanı", value: `${u.credit_score} / 1000`, inline: true },
+                { name: "Kredi Limiti", value: `${fmt(limit)}`, inline: true },
+                { name: "Mevcut Borç", value: `${fmt(debt)}`, inline: true },
+                { name: "Aktif Kredi", value: `${loans.length} / ${LOAN_MAX_ACTIVE_COUNT}`, inline: true },
+                { name: "Sistem", value: `Faiz Oranı: %${Number(INTEREST_RATE_LOAN)*100}\nGecikme Cezası: %${Number(LOAN_LATE_PENALTY_RATE)*100}` }
+            );
+            await replySafe(i, { embeds: [e] });
         }
     },
     investment: async (i) => {
         const sub = i.options.getSubcommand();
         if (sub === "create") {
             const inv = await createInvestment(i.user.id, i.options.getString("miktar"), i.options.getString("gun"));
-            await i.reply({ embeds: [embedBase(THEME.success).setDescription(`📈 Yatırım oluşturuldu!\n\n**Yatırılan:** ${fmt(inv.amount)}\n**Vade Sonu Getiri:** ${fmt(inv.return_amount)}\n**Kilit Açılma:** <t:${inv.unlocks_at}:f>\n**ID:** \`${inv.id}\``)] });
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`📈 Yatırım oluşturuldu!\n\n**Yatırılan:** ${fmt(inv.amount)}\n**Vade Sonu Getiri:** ${fmt(inv.return_amount)}\n**Kilit Açılma:** <t:${inv.unlocks_at}:R>\n**ID:** \`${inv.id}\``)] });
         } else if (sub === "claim") {
             const r = await claimInvestment(i.user.id, i.options.getString("id"), false);
-            await i.reply({ embeds: [embedBase(THEME.success).setDescription(`📈 Yatırım vadesi doldu ve çekildi!\n\n**Kazanılan:** ${fmt(r.payout)}`)] });
+            await writeAuditLog(i.user.id, "INVESTMENT_CLAIM", i.user.id, `Kazanç: ${r.payout}`);
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`📈 Yatırım vadesi doldu ve çekildi!\n\n**Kazanılan:** ${fmt(r.payout)}`)] });
         } else if (sub === "break") {
             const r = await claimInvestment(i.user.id, i.options.getString("id"), true);
-            await i.reply({ embeds: [embedBase(THEME.error).setDescription(`⚠️ Yatırım erken bozuldu (Cezalı)!\n\n**Kurtarılan:** ${fmt(r.payout)}\n*Kredi Puanın düştü.*`)] });
+            await replySafe(i, { embeds: [embedBase(THEME.error).setDescription(`⚠️ Yatırım erken bozuldu (Cezalı)!\n\n**Kurtarılan:** ${fmt(r.payout)}\n*Kredi Puanın düştü.*`)] });
         } else if (sub === "list") {
             const invs = await DB.getInvestments(i.user.id);
             if (!invs.length) throw new Error("Aktif yatırımın bulunmuyor.");
             const e = embedBase(THEME.finance).setTitle("📈 Aktif Yatırımlar");
             for(let inv of invs) e.addFields({name: `ID: ${inv.id}`, value: `**Yatırılan:** ${fmt(inv.amount)} ➔ **Getiri:** ${fmt(inv.return_amount)}\n**Açılış:** <t:${inv.unlocks_at}:R>`, inline: false});
-            await i.reply({ embeds: [e] });
+            await replySafe(i, { embeds: [e] });
         }
     },
     cooldowns: async (i) => {
@@ -1063,28 +1230,29 @@ const handlers = {
             const left = await checkCooldownLeft(i.user.id, k);
             lines.push(`**${k.toUpperCase()}**: ${left > 0 ? msToHuman(left) : "✅ Hazır"}`);
         }
-        await i.reply({ flags: MessageFlags.Ephemeral, embeds: [embedBase().setTitle("⏱️ Bekleme Süreleri").setDescription(lines.join("\n"))] });
+        await replySafe(i, { flags: MessageFlags.Ephemeral, embeds: [embedBase().setTitle("⏱️ Bekleme Süreleri").setDescription(lines.join("\n"))] });
     },
     profile: async (i) => {
         if (i.options.getSubcommand() === "setbio") {
             await DB.acquireLock(i.user.id);
             try {
                 const u = await DB.getUser(i.user.id); u.bio = i.options.getString("metin").slice(0, 180); await DB.saveUser(i.user.id, u);
-                await i.reply({ embeds: [embedBase(THEME.success).setDescription("✅ Biyografi güncellendi.")] });
+                await replySafe(i, { embeds: [embedBase(THEME.success).setDescription("✅ Biyografi güncellendi.")] });
             } finally { DB.releaseLock(i.user.id); }
         } else {
             const target = i.options.getUser("kullanici") || i.user;
             const u = await DB.getUser(target.id);
+            const xpBar = makeXpBar(u.xp, u.level * 500);
             const e = embedBase().setTitle(`👤 Profil — ${target.username}`).setThumbnail(target.displayAvatarURL())
                 .setDescription(u.bio ? `*"${u.bio}"*` : "*Biyografi ayarlanmamış.*")
                 .addFields(
-                    { name: "⭐ Seviye", value: `Level **${u.level}**`, inline: true },
-                    { name: "✨ XP", value: `${u.xp} / ${u.level*500}`, inline: true },
+                    { name: "⭐ Seviye & XP", value: `Level **${u.level}**\n\`${xpBar}\` (${u.xp} / ${u.level*500})`, inline: false },
                     { name: "💰 Net Değer", value: fmt(await getNetworth(target.id)), inline: true },
                     { name: "💳 Kredi Puanı", value: `${u.credit_score}`, inline: true },
-                    { name: "🔥 Günlük Seri", value: `${u.daily_streak} Gün`, inline: true }
+                    { name: "🔥 Günlük Seri", value: `${u.daily_streak} Gün`, inline: true },
+                    { name: "📅 Oluşturulma", value: `<t:${u.created_at}:D>`, inline: true }
                 );
-            await i.reply({ embeds: [e] });
+            await replySafe(i, { embeds: [e] });
         }
     },
     stats: async (i) => {
@@ -1101,7 +1269,7 @@ const handlers = {
                 { name: "🔥 En Büyük Tek Kazanç", value: fmt(s.largest_win), inline: true },
                 { name: "💀 En Büyük Tek Kayıp", value: fmt(s.largest_loss), inline: true }
             );
-        await i.reply({ embeds: [e] });
+        await replySafe(i, { embeds: [e] });
     },
     leaderboard: async (i) => {
         const type = i.options.getString("tur");
@@ -1114,7 +1282,7 @@ const handlers = {
         }
         arr.sort((a,b) => b.val - a.val);
         const lines = arr.slice(0, 10).map((r, idx) => `**${idx + 1}.** <@${r.id}> — ${fmt(r.val)}`).join("\n") || "Kayıt yok.";
-        await i.reply({ embeds: [embedBase().setTitle(`🏆 Top 10 — ${type.toUpperCase()}`).setDescription(lines)] });
+        await replySafe(i, { embeds: [embedBase().setTitle(`🏆 Top 10 — ${type.toUpperCase()}`).setDescription(lines)] });
     },
     top: async (i) => {
         const sub = i.options.getSubcommand();
@@ -1124,10 +1292,13 @@ const handlers = {
         if (sub === "gamblers") arr = all.map(u => ({id: u.user_id, val: (u.stats.slots_plays||0) + (u.stats.coinflip_plays||0)}));
         if (sub === "richest") arr = await Promise.all(all.map(async u => ({ id: u.user_id, val: await getNetworth(u.user_id) })));
         if (sub === "level") arr = all.map(u => ({id: u.user_id, val: u.level || 1}));
+        if (sub === "wallet") arr = all.map(u => ({id: u.user_id, val: u.wallet || 0}));
+        if (sub === "bank") arr = all.map(u => ({id: u.user_id, val: u.bank || 0}));
         
         arr.sort((a,b) => b.val - a.val);
-        const lines = arr.slice(0, 10).map((r, idx) => `**${idx + 1}.** <@${r.id}> — ${sub === "richest" ? fmt(r.val) : r.val}`).join("\n") || "Kayıt yok.";
-        await i.reply({ embeds: [embedBase().setTitle(`🏆 Top 10 — ${sub.toUpperCase()}`).setDescription(lines)] });
+        const formatVal = (sub === "richest" || sub === "wallet" || sub === "bank") ? fmt : (x => x);
+        const lines = arr.slice(0, 10).map((r, idx) => `**${idx + 1}.** <@${r.id}> — ${formatVal(r.val)}`).join("\n") || "Kayıt yok.";
+        await replySafe(i, { embeds: [embedBase().setTitle(`🏆 Top 10 — ${sub.toUpperCase()}`).setDescription(lines)] });
     },
     rank: async (i) => {
         const all = await DB.getAllUsers();
@@ -1139,22 +1310,116 @@ const handlers = {
             const idx = arr.findIndex(x => x.id === i.user.id);
             return idx !== -1 ? `#${idx + 1}` : "Yok";
         };
-        await i.reply({ embeds: [embedBase().setTitle(`📊 Sıralaman`).addFields(
+        await replySafe(i, { embeds: [embedBase().setTitle(`📊 Sıralaman`).addFields(
             { name: "Cüzdan Sırası", value: await getRank("wallet"), inline: true },
             { name: "Banka Sırası", value: await getRank("bank"), inline: true },
-            { name: "Networth Sırası", value: await getRank("networth"), inline: true }
+            { name: "Networth Sırası", value: await getRank("networth"), inline: true },
+            { name: "Level Sırası", value: await getRank("level"), inline: true }
         )]});
+    },
+
+    // ------------------------------------------------------------------------
+    // ADMIN SYSTEM (Robust and Secure)
+    // ------------------------------------------------------------------------
+    admin: async (i) => {
+        if (!ADMIN_LIST.includes(i.user.id)) throw new Error("⛔ Yetkisiz erişim. Bu komut sadece Owner/Admin listesindekiler içindir.");
+        const sub = i.options.getSubcommand();
+        const e = embedBase(THEME.admin).setTitle("🛠️ Admin Paneli");
+        let logAction = "", logDetails = "";
+
+        if (["addcoins", "removecoins", "setcoins"].includes(sub)) {
+            const target = i.options.getUser("hedef"); const tur = i.options.getString("tur"); const miktar = i.options.getInteger("miktar");
+            await DB.acquireLock(target.id);
+            try {
+                const u = await DB.getUser(target.id);
+                if (sub === "addcoins") u[tur] += miktar;
+                if (sub === "removecoins") u[tur] = Math.max(0, u[tur] - miktar);
+                if (sub === "setcoins") u[tur] = Math.max(0, miktar);
+                await DB.saveUser(target.id, u);
+                e.setDescription(`✅ **${target.username}** kullanıcısının **${tur}** bakiyesi değiştirildi. Yeni bakiye: ${fmt(u[tur])}`);
+                logAction = `ADMIN_${sub.toUpperCase()}`; logDetails = `${tur} -> ${miktar} | New: ${u[tur]}`;
+            } finally { DB.releaseLock(target.id); }
+            await writeAuditLog(i.user.id, logAction, target.id, logDetails);
+        }
+        else if (["additem", "removeitem"].includes(sub)) {
+            const target = i.options.getUser("hedef"); const item = i.options.getString("esya"); const qty = i.options.getInteger("adet");
+            await DB.acquireLock(target.id);
+            try {
+                if (sub === "additem") { await addItem(target.id, item, qty); e.setDescription(`✅ Verildi: **${item}** x${qty} -> ${target.username}`); }
+                if (sub === "removeitem") { const ok = await removeItem(target.id, item, qty); if (!ok) throw new Error("Yeterli yok."); e.setDescription(`✅ Silindi: **${item}** x${qty} <- ${target.username}`); }
+            } finally { DB.releaseLock(target.id); }
+            await writeAuditLog(i.user.id, `ADMIN_${sub.toUpperCase()}`, target.id, `${item} x${qty}`);
+        }
+        else if (sub === "setlevel") {
+            const target = i.options.getUser("hedef"); const lvl = i.options.getInteger("level");
+            await DB.acquireLock(target.id);
+            try { const u = await DB.getUser(target.id); u.level = lvl; await DB.saveUser(target.id, u); e.setDescription(`✅ Level güncellendi: ${lvl}`); } finally { DB.releaseLock(target.id); }
+            await writeAuditLog(i.user.id, "ADMIN_SETLEVEL", target.id, `Level -> ${lvl}`);
+        }
+        else if (sub === "resetcooldown") {
+            const target = i.options.getUser("hedef"); const cmd = i.options.getString("komut");
+            await DB.resetCooldown(target.id, cmd);
+            e.setDescription(`✅ **${target.username}** için **${cmd}** süresi sıfırlandı.`);
+            await writeAuditLog(i.user.id, "ADMIN_CD_RESET", target.id, cmd);
+        }
+        else if (sub === "blacklist") {
+            const target = i.options.getUser("hedef"); const islem = i.options.getString("islem");
+            const conf = await DB.getGlobalConfig();
+            if (!conf.blacklist) conf.blacklist = [];
+            if (islem === "add") { if (!conf.blacklist.includes(target.id)) conf.blacklist.push(target.id); e.setDescription(`⛔ ${target.username} kara listeye eklendi.`); }
+            else { conf.blacklist = conf.blacklist.filter(id => id !== target.id); e.setDescription(`✅ ${target.username} kara listeden çıkarıldı.`); }
+            await DB.saveGlobalConfig(conf);
+            await writeAuditLog(i.user.id, `ADMIN_BLACKLIST_${islem.toUpperCase()}`, target.id, "");
+        }
+        else if (sub === "freeze") {
+            const durum = i.options.getBoolean("durum");
+            const conf = await DB.getGlobalConfig();
+            conf.economy_freeze = durum;
+            await DB.saveGlobalConfig(conf);
+            e.setDescription(durum ? `❄️ Ekonomi donduruldu. Tüm işlemler durdu.` : `☀️ Ekonomi tekrar aktif edildi.`);
+            await writeAuditLog(i.user.id, "ADMIN_FREEZE", "GLOBAL", durum.toString());
+        }
+        else if (sub === "userinfo") {
+            const target = i.options.getUser("hedef");
+            const u = await DB.getUser(target.id);
+            e.setDescription(`\`\`\`json\n${JSON.stringify(u, null, 2).slice(0, 4000)}\n\`\`\``);
+            await writeAuditLog(i.user.id, "ADMIN_USERINFO", target.id, "Data inspected.");
+        }
+        else if (sub === "economyinfo") {
+            const all = await DB.getAllUsers();
+            const w = all.reduce((a,u) => a + u.wallet, 0); const b = all.reduce((a,u) => a + u.bank, 0);
+            e.setDescription(`**Genel Ekonomi Durumu**\nKayıtlı Profil: ${all.length}\nDolaşan Nakit: ${fmt(w)}\nBanka Rezervi: ${fmt(b)}\nToplam Hacim: ${fmt(w+b)}`);
+        }
+        await replySafe(i, { embeds: [e], flags: MessageFlags.Ephemeral });
     }
 };
 
 // ============================================================================
-// 13. CLIENT & EXPRESS BOOTSTRAP
+// 26. ERROR HANDLING / REPLY SAFETY (Smart Defer Router)
 // ============================================================================
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-const app = express();
+async function replySafe(interaction, payload) {
+    try {
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply(payload);
+        } else {
+            await interaction.reply(payload);
+        }
+    } catch (e) {
+        errorLog("ReplySafe Error", e);
+    }
+}
 
+// ============================================================================
+// 27. EXPRESS HEALTH ENDPOINT
+// ============================================================================
+const app = express();
 app.get("/", (_req, res) => res.status(200).send(`MetaCoin REBORN v${VERSION} - SYSTEM ONLINE`));
 app.listen(PORT, () => log(`Express Endpoint Aktif: ${PORT}`));
+
+// ============================================================================
+// 28. STARTUP / BOOTSTRAP
+// ============================================================================
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.once(Events.ClientReady, async (c) => {
     log(`[DISCORD] ${c.user.tag} aktif!`);
@@ -1170,28 +1435,65 @@ client.once(Events.ClientReady, async (c) => {
     }
 });
 
+// Main Interaction Event
 client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     const handler = handlers[interaction.commandName];
     if (!handler) return;
 
+    let startTime = Date.now();
     try {
+        // Smart Defer Mechanism
+        if (COMMAND_DEFER_MODE === "smart") {
+            await interaction.deferReply();
+        }
+
+        // Global Security Checks (Freeze, Blacklist)
+        if (interaction.commandName !== "admin") {
+            await checkGlobalSecurity(interaction.user.id);
+        }
+
         await handler(interaction);
+        debug(`Command /${interaction.commandName} executed`, Date.now() - startTime);
+
     } catch (err) {
-        const isCustom = err.message && !err.message.includes("DiscordAPI");
-        const msg = isCustom ? `❌ ${err.message}` : "❌ Beklenmeyen bir sunucu hatası oluştu.";
-        if (!isCustom) errorLog(`Command Error (${interaction.commandName})`, err);
+        const isSystemError = err.message.includes("DiscordAPI") || err.message.includes("is not defined") || err.message.includes("read properties");
+        const msg = !isSystemError ? `❌ ${err.message}` : "❌ Beklenmeyen teknik bir sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.";
+        if (isSystemError) errorLog(`System Error (${interaction.commandName})`, err);
         
+        let errPayload = USE_GLOBAL_ERROR_EMBEDS === "true" 
+            ? { embeds: [embedBase(THEME.error).setDescription(msg)] } 
+            : { content: msg };
+            
+        errPayload.flags = MessageFlags.Ephemeral;
+
         try {
-            if (interaction.deferred || interaction.replied) await interaction.followUp({ flags: MessageFlags.Ephemeral, embeds: [embedBase(THEME.error).setDescription(msg)] });
-            else await interaction.reply({ flags: MessageFlags.Ephemeral, embeds: [embedBase(THEME.error).setDescription(msg)] });
-        } catch (e) { /* Ignore double fail */ }
+            await replySafe(interaction, errPayload);
+        } catch (e) { /* Fallback fail gracefully */ }
     }
 });
 
-// Güvenli Kapanış
-process.on("SIGTERM", async () => { log("SIGTERM alındı, JSON save tetikleniyor."); if (DATA_PROVIDER === "json") await JsonImpl.save(true); process.exit(0); });
-process.on("SIGINT", async () => { log("SIGINT alındı."); if (DATA_PROVIDER === "json") await JsonImpl.save(true); process.exit(0); });
+// ============================================================================
+// 29. SCHEDULED JOBS
+// ============================================================================
+// Handled inside JsonImpl for intervals
+
+// ============================================================================
+// 30. GRACEFUL SHUTDOWN / BACKUP / RECOVERY
+// ============================================================================
+const shutdown = async (signal) => {
+    log(`${signal} sinyali alındı. Kapanış prosedürü başlatılıyor...`);
+    if (DATA_PROVIDER === "json") {
+        log("JSON zorunlu senkronizasyon yapılıyor...");
+        await JsonImpl.save(true);
+        await JsonImpl.backup();
+    }
+    log("İşlem tamamlandı. Sistem kapatılıyor.");
+    process.exit(0);
+};
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("uncaughtException", (err) => errorLog("Uncaught Exception", err));
 process.on("unhandledRejection", (err) => errorLog("Unhandled Rejection", err));
 
