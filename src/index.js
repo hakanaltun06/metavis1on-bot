@@ -220,6 +220,12 @@ class StorageManager {
     async saveDocument(id, col, docId, doc) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, col, docId, doc) : JsonImpl.saveDocument(id, col, docId, doc); }
     async deleteDocument(id, col, docId) { return this.provider === "firestore" ? FirestoreImpl.deleteDocument(id, col, docId) : JsonImpl.deleteDocument(id, col, docId); }
 
+    // EKSİK OLAN FONKSİYONLAR BURAYA EKLENDİ
+    async getLoans(id) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, "loans") : JsonImpl.getCollection(id, "loans"); }
+    async saveLoan(id, loan) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, "loans", loan.id, loan) : JsonImpl.saveDocument(id, "loans", loan.id, loan); }
+    async getInvestments(id) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, "investments") : JsonImpl.getCollection(id, "investments"); }
+    async saveInvestment(id, inv) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, "investments", inv.id, inv) : JsonImpl.saveDocument(id, "investments", inv.id, inv); }
+
     // Helpers
     async addTransaction(id, tx) { 
         tx.id = generateId(); tx.timestamp = nowSec(); 
