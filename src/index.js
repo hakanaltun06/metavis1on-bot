@@ -1430,7 +1430,13 @@ async function replySafe(interaction, payload) {
             await interaction.reply(payload);
         }
     } catch (e) {
-        errorLog("ReplySafe Error", e);
+        // 10062: Unknown interaction (Zaman aşımı)
+        // 40060: Interaction already acknowledged (Başka bir instance/cluster çoktan yanıtlamış)
+        if (e.code === 10062 || e.code === 40060) {
+            debug(`[IGNORED] Discord API ${e.code}: Çift tetiklenme veya zaman aşımı yoksayıldı.`);
+        } else {
+            errorLog("ReplySafe Error", e);
+        }
     }
 }
 
@@ -1468,9 +1474,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     let startTime = Date.now();
     try {
-        // Smart Defer Mechanism
+        // Smart Defer Mechanism - Bazı komutları gizli(ephemeral) olarak bekletmeliyiz
+        const ephemeralCommands = ["cooldowns", "admin"];
+        const isEphemeral = ephemeralCommands.includes(interaction.commandName);
+
         if (COMMAND_DEFER_MODE === "smart") {
-            await interaction.deferReply();
+            try {
+                await interaction.deferReply({ ephemeral: isEphemeral });
+            } catch (deferErr) {
+                // Eğer defer atarken 40060 hatası yersek işlemi tamamen kes, bot çift çalışıyor demektir.
+                if (deferErr.code === 40060 || deferErr.code === 10062) return;
+                throw deferErr;
+            }
         }
 
         // Global Security Checks (Freeze, Blacklist)
@@ -1482,6 +1497,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         debug(`Command /${interaction.commandName} executed`, Date.now() - startTime);
 
     } catch (err) {
+        // API Hatalarını ve Çift Tetiklenmeleri Filtrele
+        if (err.code === 40060 || err.code === 10062) return;
+
         const isSystemError = err.message.includes("DiscordAPI") || err.message.includes("is not defined") || err.message.includes("read properties");
         const msg = !isSystemError ? `❌ ${err.message}` : "❌ Beklenmeyen teknik bir sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.";
         if (isSystemError) errorLog(`System Error (${interaction.commandName})`, err);
@@ -1492,16 +1510,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
             
         errPayload.flags = MessageFlags.Ephemeral;
 
-        try {
-            await replySafe(interaction, errPayload);
-        } catch (e) { /* Fallback fail gracefully */ }
+        await replySafe(interaction, errPayload);
     }
 });
 
 // ============================================================================
 // 29. SCHEDULED JOBS
 // ============================================================================
-// Handled inside JsonImpl for intervals
 
 // ============================================================================
 // 30. GRACEFUL SHUTDOWN / BACKUP / RECOVERY
