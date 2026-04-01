@@ -895,6 +895,9 @@ async function writeAuditLog(adminId, action, targetId, details) {
 // ============================================================================
 // 24. SLASH COMMAND BUILDERS
 // ============================================================================
+// ============================================================================
+// 24. SLASH COMMAND BUILDERS
+// ============================================================================
 const commands = [
     new SlashCommandBuilder().setName("help").setDescription("MetaCoin REBORN komut yardım listesi"),
     new SlashCommandBuilder().setName("balance").setDescription("Cüzdan, banka ve net değerinizi gösterir.").addUserOption(o => o.setName("kullanici").setDescription("Kimin?")),
@@ -906,15 +909,36 @@ const commands = [
     new SlashCommandBuilder().setName("beg").setDescription(`Dilencilik (${BEG_COOLDOWN_MINUTES} dk).`),
     new SlashCommandBuilder().setName("crime").setDescription(`Suç işle (${CRIME_COOLDOWN_MINUTES} dk).`),
     new SlashCommandBuilder().setName("rob").setDescription(`Soygun yap (${ROB_COOLDOWN_MINUTES} dk).`).addUserOption(o => o.setName("hedef").setRequired(true).setDescription("Kurban")),
-    new SlashCommandBuilder().setName("bet").setDescription("Yazı tura.").addStringOption(o => o.setName("taraf").setRequired(true).setDescription("heads/tails").addChoices({name:"heads",value:"heads"},{name:"tails",value:"tails"})).addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar veya 'all'")),
+    
+    // Güvenli Choices yapıları
+    new SlashCommandBuilder().setName("bet").setDescription("Yazı tura.")
+        .addStringOption(o => o.setName("taraf").setRequired(true).setDescription("heads/tails").addChoices({ name: "heads", value: "heads" }, { name: "tails", value: "tails" }))
+        .addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar veya 'all'")),
+    
     new SlashCommandBuilder().setName("slots").setDescription("Slot makinesi.").addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar veya 'all'")),
-    new SlashCommandBuilder().setName("shop").setDescription("Mağazayı görüntüle.").addStringOption(o => o.setName("kategori").setDescription("crates/items").addChoices({name:"crates",value:"crates"},{name:"items",value:"items"})),
-    new SlashCommandBuilder().setName("buy").setDescription("Satın al.").addStringOption(o => o.setName("urun").setRequired(true).setDescription("Adı")).addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet veya 'all'")),
+    
+    new SlashCommandBuilder().setName("shop").setDescription("Mağazayı görüntüle.")
+        .addStringOption(o => o.setName("kategori").setDescription("crates/items").addChoices({ name: "crates", value: "crates" }, { name: "items", value: "items" })),
+    
+    new SlashCommandBuilder().setName("buy").setDescription("Satın al.")
+        .addStringOption(o => o.setName("urun").setRequired(true).setDescription("Adı"))
+        .addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet veya 'all'")),
+        
     new SlashCommandBuilder().setName("inventory").setDescription("Envanter.").addUserOption(o => o.setName("kullanici").setDescription("Kimin?")),
-    new SlashCommandBuilder().setName("open").setDescription("Kasa aç.").addStringOption(o => o.setName("kasa").setRequired(true).setDescription("basic/rare/epic/legendary").addChoices({name:"basic",value:"basic"},{name:"rare",value:"rare"},{name:"epic",value:"epic"},{name:"legendary",value:"legendary"})).addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet veya 'all'")),
-    new SlashCommandBuilder().setName("sell").setDescription("Eşya sat.").addStringOption(o => o.setName("esya").setRequired(true).setDescription("Adı")).addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet veya 'all'")),
+    
+    new SlashCommandBuilder().setName("open").setDescription("Kasa aç.")
+        .addStringOption(o => o.setName("kasa").setRequired(true).setDescription("basic/rare/epic/legendary").addChoices({ name: "basic", value: "basic" }, { name: "rare", value: "rare" }, { name: "epic", value: "epic" }, { name: "legendary", value: "legendary" }))
+        .addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet veya 'all'")),
+        
+    new SlashCommandBuilder().setName("sell").setDescription("Eşya sat.")
+        .addStringOption(o => o.setName("esya").setRequired(true).setDescription("Adı"))
+        .addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet veya 'all'")),
+        
     new SlashCommandBuilder().setName("sellall").setDescription("Satılabilir tüm eşyaları satar."),
-    new SlashCommandBuilder().setName("leaderboard").setDescription("Liderlik tablosu").addStringOption(o => o.setName("tur").setRequired(true).addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"},{name:"networth",value:"networth"})),
+    
+    new SlashCommandBuilder().setName("leaderboard").setDescription("Liderlik tablosu")
+        .addStringOption(o => o.setName("tur").setRequired(true).setDescription("Kategori seç").addChoices({ name: "wallet", value: "wallet" }, { name: "bank", value: "bank" }, { name: "networth", value: "networth" })),
+        
     new SlashCommandBuilder().setName("cooldowns").setDescription("Bekleme süreleri."),
     new SlashCommandBuilder().setName("rank").setDescription("Sıralaman."),
     new SlashCommandBuilder().setName("crateinfo").setDescription("Kasa içerikleri."),
@@ -957,18 +981,19 @@ const commands = [
 
     // Admin System
     new SlashCommandBuilder().setName("admin").setDescription("Yönetici Komutları")
-        .addSubcommand(s=> s.setName("addcoins").setDescription("Para ver").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
-        .addSubcommand(s=> s.setName("removecoins").setDescription("Para sil").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
-        .addSubcommand(s=> s.setName("setcoins").setDescription("Para ayarla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
+        .addSubcommand(s=> s.setName("addcoins").setDescription("Para ver").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).setDescription("Hesap türü").addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
+        .addSubcommand(s=> s.setName("removecoins").setDescription("Para sil").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).setDescription("Hesap türü").addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
+        .addSubcommand(s=> s.setName("setcoins").setDescription("Para ayarla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).setDescription("Hesap türü").addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
         .addSubcommand(s=> s.setName("additem").setDescription("Eşya ver").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("esya").setRequired(true).setDescription("Ne")).addIntegerOption(o=>o.setName("adet").setRequired(true).setDescription("Kaç")))
         .addSubcommand(s=> s.setName("removeitem").setDescription("Eşya al").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("esya").setRequired(true).setDescription("Ne")).addIntegerOption(o=>o.setName("adet").setRequired(true).setDescription("Kaç")))
         .addSubcommand(s=> s.setName("setlevel").setDescription("Level ayarla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addIntegerOption(o=>o.setName("level").setRequired(true).setDescription("Level")))
         .addSubcommand(s=> s.setName("resetcooldown").setDescription("Bekleme süresi sıfırla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("komut").setRequired(true).setDescription("Komut adı")))
-        .addSubcommand(s=> s.setName("blacklist").setDescription("Kullanıcı kara liste").addStringOption(o=>o.setName("islem").setRequired(true).addChoices({name:"add",value:"add"},{name:"remove",value:"remove"})).addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")))
+        .addSubcommand(s=> s.setName("blacklist").setDescription("Kullanıcı kara liste").addStringOption(o=>o.setName("islem").setRequired(true).setDescription("Ekle veya Çıkar").addChoices({name:"add",value:"add"},{name:"remove",value:"remove"})).addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")))
         .addSubcommand(s=> s.setName("freeze").setDescription("Ekonomiyi dondur").addBooleanOption(o=>o.setName("durum").setRequired(true).setDescription("True: Dondur, False: Aç")))
         .addSubcommand(s=> s.setName("userinfo").setDescription("Ham data gör").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")))
         .addSubcommand(s=> s.setName("economyinfo").setDescription("Sistem analizi"))
 ];
+
 const allSlashJSON = commands.map(c => c.toJSON());
 
 // ============================================================================
