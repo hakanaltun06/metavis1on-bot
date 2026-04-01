@@ -358,6 +358,12 @@ async function getNetworth(userId) {
     return u.wallet + u.bank + itemsWorth;
 }
 
+// SİLİNEN VE EKLENEN BEKLEME SÜRESİ KONTROL FONKSİYONU BURASI
+async function checkCooldownLeft(userId, cmd) {
+    const readyAt = await DB.getCooldown(userId, cmd);
+    const now = nowSec();
+    return (readyAt > now) ? (readyAt - now) * 1000 : 0;
+}
 // ============================================================================
 // 12. ECONOMY CORE
 // ============================================================================
