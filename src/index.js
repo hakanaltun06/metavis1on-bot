@@ -1,10 +1,10 @@
 /**
  * ============================================================================
- * MetaCoin REBORN v1.0.0 (Hardening & Completion Update)
+ * MetaCoin REBORN v1.1.0 (GOD TIER UPGRADE)
  * Next-Gen Advanced Discord Economy Bot
- * * * Mimarisi: 30 Bölümlük Organize Tek Dosya (Single-File Architecture)
- * * Özellikler: Lazy Faiz Sistemi, Dinamik Kredi/Ceza, Gelişmiş Audit/Admin
- * * Güvenlik: Smart Defer Interaction Router, Atomic Locks, Exploit Koruması
+ * * Mimarisi: 30 Bölümlük Organize Tek Dosya (Single-File Architecture)
+ * * Özellikler: Lazy Faiz Sistemi, Dinamik Kredi/Ceza, Hibrit Ödeme, Gelişmiş Admin
+ * * Güvenlik: Smart Defer, Atomic Locks, s.string() Validasyon Çözümü, 40060 Bypass
  * ============================================================================
  */
 
@@ -52,7 +52,7 @@ if (!DISCORD_TOKEN || !CLIENT_ID) {
 }
 const ADMIN_LIST = OWNER_IDS.split(",").map(id => id.trim()).filter(Boolean);
 const IS_DEBUG = DEBUG === "true";
-const VERSION = "1.0.0 - REBORN";
+const VERSION = "1.1.0 - GOD TIER";
 
 // ============================================================================
 // 3. CONSTANTS
@@ -162,7 +162,7 @@ const createUserTemplate = (userId) => ({
     bank_max: Number(STARTING_BANK_MAX),
     xp: 0, level: 1, bio: null,
     created_at: nowSec(), updated_at: nowSec(),
-    last_interest_calc: nowSec(), // Lazy Interest Track
+    last_interest_calc: nowSec(),
     daily_streak: 0, last_daily: 0,
     total_interest_earned: 0, total_loan_interest_paid: 0, total_taxes_paid: 0, credit_score: 500,
     stats: {
@@ -174,7 +174,6 @@ const createUserTemplate = (userId) => ({
     }
 });
 
-// Auto-Heal Function for schema updates on the fly
 function normalizeSchema(user) {
     const tpl = createUserTemplate(user.user_id);
     const healObj = (target, source) => {
@@ -187,11 +186,14 @@ function normalizeSchema(user) {
         }
     };
     healObj(user, tpl);
+    // Negative balance strict prevention
+    if (user.wallet < 0) user.wallet = 0;
+    if (user.bank < 0) user.bank = 0;
     return user;
 }
 
 // ============================================================================
-// 8. STORAGE ABSTRACTION LAYER
+// 8. STORAGE ABSTRACTION LAYER (100% Coverage)
 // ============================================================================
 class StorageManager {
     constructor() { this.provider = DATA_PROVIDER; this.locks = new Set(); }
@@ -208,25 +210,22 @@ class StorageManager {
         log(`Storage Modülü Aktif: ${this.provider.toUpperCase()}`);
     }
 
-    // Core Data
     async getUser(id) { let u = this.provider === "firestore" ? await FirestoreImpl.getUser(id) : await JsonImpl.getUser(id); return normalizeSchema(u); }
     async saveUser(id, data) { data.updated_at = nowSec(); return this.provider === "firestore" ? FirestoreImpl.saveUser(id, data) : JsonImpl.saveUser(id, data); }
     async getInventory(id) { return this.provider === "firestore" ? FirestoreImpl.getInventory(id) : JsonImpl.getInventory(id); }
     async saveInventory(id, inv) { return this.provider === "firestore" ? FirestoreImpl.saveInventory(id, inv) : JsonImpl.saveInventory(id, inv); }
     async getAllUsers() { return this.provider === "firestore" ? FirestoreImpl.getAllUsers() : JsonImpl.getAllUsers(); }
 
-    // Sub-Collections
     async getCollection(id, col) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, col) : JsonImpl.getCollection(id, col); }
     async saveDocument(id, col, docId, doc) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, col, docId, doc) : JsonImpl.saveDocument(id, col, docId, doc); }
     async deleteDocument(id, col, docId) { return this.provider === "firestore" ? FirestoreImpl.deleteDocument(id, col, docId) : JsonImpl.deleteDocument(id, col, docId); }
 
-    // EKSİK OLAN FONKSİYONLAR BURAYA EKLENDİ
+    // Core Sub-Collection Bridges
     async getLoans(id) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, "loans") : JsonImpl.getCollection(id, "loans"); }
     async saveLoan(id, loan) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, "loans", loan.id, loan) : JsonImpl.saveDocument(id, "loans", loan.id, loan); }
     async getInvestments(id) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, "investments") : JsonImpl.getCollection(id, "investments"); }
     async saveInvestment(id, inv) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, "investments", inv.id, inv) : JsonImpl.saveDocument(id, "investments", inv.id, inv); }
 
-    // Helpers
     async addTransaction(id, tx) { 
         tx.id = generateId(); tx.timestamp = nowSec(); 
         return this.provider === "firestore" ? FirestoreImpl.addTransaction(id, tx) : JsonImpl.addTransaction(id, tx); 
@@ -235,7 +234,6 @@ class StorageManager {
     async setCooldown(id, cmd, ms) { return this.provider === "firestore" ? FirestoreImpl.setCooldown(id, cmd, ms) : JsonImpl.setCooldown(id, cmd, ms); }
     async resetCooldown(id, cmd) { return this.provider === "firestore" ? FirestoreImpl.resetCooldown(id, cmd) : JsonImpl.resetCooldown(id, cmd); }
 
-    // Global Config & Audit
     async getGlobalConfig() { return this.provider === "firestore" ? FirestoreImpl.getGlobalConfig() : JsonImpl.getGlobalConfig(); }
     async saveGlobalConfig(conf) { return this.provider === "firestore" ? FirestoreImpl.saveGlobalConfig(conf) : JsonImpl.saveGlobalConfig(conf); }
     async addAuditLog(entry) { return this.provider === "firestore" ? FirestoreImpl.addAuditLog(entry) : JsonImpl.addAuditLog(entry); }
@@ -358,12 +356,12 @@ async function getNetworth(userId) {
     return u.wallet + u.bank + itemsWorth;
 }
 
-// SİLİNEN VE EKLENEN BEKLEME SÜRESİ KONTROL FONKSİYONU BURASI
 async function checkCooldownLeft(userId, cmd) {
     const readyAt = await DB.getCooldown(userId, cmd);
     const now = nowSec();
     return (readyAt > now) ? (readyAt - now) * 1000 : 0;
 }
+
 // ============================================================================
 // 12. ECONOMY CORE
 // ============================================================================
@@ -376,7 +374,7 @@ function applyTax(amount, type, userObj) {
     
     const tax = Math.floor(amount * rate);
     userObj.total_taxes_paid = (userObj.total_taxes_paid || 0) + tax;
-    return { amount: amount - tax, tax };
+    return { amount: Math.max(0, amount - tax), tax };
 }
 
 async function addItem(userId, item, qty) {
@@ -400,7 +398,7 @@ async function removeItem(userId, item, qty) {
 async function processDeposit(userId, amountStr) {
     await DB.acquireLock(userId);
     try {
-        await accrueInterestLazy(userId); // Compute pending interest first
+        await accrueInterestLazy(userId);
         const u = await DB.getUser(userId);
         let amount = validateAmount(amountStr, true) === "all" ? u.wallet : validateAmount(amountStr);
         if (u.wallet < amount) throw new Error("Cüzdanda yeterli bakiye yok.");
@@ -408,7 +406,7 @@ async function processDeposit(userId, amountStr) {
         const will = Math.min(amount, can);
         if (will <= 0) throw new Error("Bankada yer yok.");
         
-        u.wallet -= will; u.bank += will;
+        u.wallet = Math.max(0, u.wallet - will); u.bank += will;
         await DB.saveUser(userId, u);
         await DB.addTransaction(userId, { type: "deposit", amount: will, status: "success" });
         return will;
@@ -418,13 +416,13 @@ async function processDeposit(userId, amountStr) {
 async function processWithdraw(userId, amountStr) {
     await DB.acquireLock(userId);
     try {
-        await accrueInterestLazy(userId); // Get lazy interest before withdraw
+        await accrueInterestLazy(userId);
         const u = await DB.getUser(userId);
         let amount = validateAmount(amountStr, true) === "all" ? u.bank : validateAmount(amountStr);
         if (u.bank < amount) throw new Error("Bankada yeterli bakiye yok.");
         
         const { amount: net, tax } = applyTax(amount, "withdraw", u);
-        u.bank -= amount; u.wallet += net;
+        u.bank = Math.max(0, u.bank - amount); u.wallet += net;
         
         await DB.saveUser(userId, u);
         await DB.addTransaction(userId, { type: "withdraw", amount, net, tax, status: "success" });
@@ -434,19 +432,19 @@ async function processWithdraw(userId, amountStr) {
 
 async function processTransfer(fromId, toId, amountStr) {
     if (fromId === toId) throw new Error("Kendine para gönderemezsin.");
-    const amount = validateAmount(amountStr, true); // if all passed, we handle below
     
     await DB.acquireLock(fromId);
     await DB.acquireLock(toId);
     try {
         const from = await DB.getUser(fromId);
+        const amount = validateAmount(amountStr, true);
         let finalAmount = amount === "all" ? from.wallet : amount;
         
         if (finalAmount > Number(MAX_TRANSFER_AMOUNT)) throw new Error(`Tek seferde en fazla ${fmt(MAX_TRANSFER_AMOUNT)} gönderebilirsin.`);
-        if (from.wallet < finalAmount) throw new Error("Cüzdanında yeterli para yok.");
+        if (from.wallet < finalAmount || finalAmount <= 0) throw new Error("Cüzdanında yeterli para yok.");
         
         const { amount: net, tax } = applyTax(finalAmount, "transfer", from);
-        from.wallet -= finalAmount;
+        from.wallet = Math.max(0, from.wallet - finalAmount);
         updateStat(from, "total_transferred_out", finalAmount);
         
         const to = await DB.getUser(toId);
@@ -478,7 +476,7 @@ function processXP(u, amount) {
 }
 
 // ============================================================================
-// 15. LOAN LOGIC (Hardened with Penalties & Limits)
+// 15. LOAN LOGIC (Hybrid Wallet+Bank Repayment)
 // ============================================================================
 function checkLoanPenalties(u, loans) {
     let now = nowSec();
@@ -488,7 +486,7 @@ function checkLoanPenalties(u, loans) {
             let penalty = Math.floor(l.amount * Number(LOAN_LATE_PENALTY_RATE));
             l.total_due += penalty;
             l.is_penalized = true;
-            u.credit_score = Math.max(0, u.credit_score - 50); // Big penalty hit
+            u.credit_score = Math.max(0, u.credit_score - 50);
             penalized = true;
         }
     }
@@ -501,7 +499,7 @@ async function takeLoan(userId, amountStr) {
     try {
         const u = await DB.getUser(userId);
         const loans = await DB.getLoans(userId);
-        checkLoanPenalties(u, loans); // Ensure strict penalty sync
+        checkLoanPenalties(u, loans);
         
         if (loans.length >= Number(LOAN_MAX_ACTIVE_COUNT)) throw new Error(`Aynı anda en fazla ${LOAN_MAX_ACTIVE_COUNT} aktif krediniz olabilir.`);
         
@@ -519,7 +517,7 @@ async function takeLoan(userId, amountStr) {
         updateStat(u, "loans_taken", 1);
         
         await DB.saveLoan(userId, loan);
-        for(let l of loans) if(l.is_penalized) await DB.saveLoan(userId, l); // Save altered loans
+        for(let l of loans) if(l.is_penalized) await DB.saveLoan(userId, l);
         await DB.saveUser(userId, u);
         await DB.addTransaction(userId, { type: "loan_taken", amount });
         
@@ -539,15 +537,23 @@ async function repayLoan(userId, loanId, amountStr) {
         
         let amount = validateAmount(amountStr, true) === "all" ? loan.total_due : validateAmount(amountStr);
         if (amount > loan.total_due) amount = loan.total_due;
-        if (u.wallet < amount && u.bank < amount) throw new Error("Cüzdan/banka yetersiz.");
         
-        if (u.wallet >= amount) u.wallet -= amount;
-        else { const rem = amount - u.wallet; u.wallet = 0; u.bank -= rem; }
+        const totalAvailable = u.wallet + u.bank;
+        if (totalAvailable < amount) throw new Error("Cüzdan ve banka toplamınız yetersiz.");
+        
+        // Hybrid drain: Wallet first, then Bank
+        if (u.wallet >= amount) {
+            u.wallet = Math.max(0, u.wallet - amount);
+        } else {
+            const rem = amount - u.wallet;
+            u.wallet = 0;
+            u.bank = Math.max(0, u.bank - rem);
+        }
         
         loan.total_due -= amount;
         if (loan.total_due <= 0) {
             await DB.deleteDocument(userId, "loans", loanId);
-            u.credit_score += loan.is_penalized ? 2 : 15; // less recovery if penalized
+            u.credit_score = Math.min(1000, u.credit_score + (loan.is_penalized ? 2 : 15));
             updateStat(u, "loans_repaid", 1);
         } else {
             await DB.saveLoan(userId, loan);
@@ -573,7 +579,6 @@ async function createInvestment(userId, amountStr, daysStr) {
         const u = await DB.getUser(userId);
         if (u.wallet < amount) throw new Error("Cüzdan bakiyesi yetersiz.");
         
-        // Dynamic better returns for longer lock
         let baseRate = 0.01;
         if (days >= 7) baseRate = 0.012;
         if (days >= 15) baseRate = 0.015;
@@ -582,7 +587,7 @@ async function createInvestment(userId, amountStr, daysStr) {
         const returnAmt = Math.floor(amount + (amount * baseRate * days));
         const inv = { id: generateId(), amount, return_amount: returnAmt, days, created_at: nowSec(), unlocks_at: nowSec() + (days * 86400) };
         
-        u.wallet -= amount;
+        u.wallet = Math.max(0, u.wallet - amount);
         updateStat(u, "investments_created", 1);
         await DB.saveInvestment(userId, inv); await DB.saveUser(userId, u);
         await DB.addTransaction(userId, { type: "invest_create", amount, days });
@@ -622,7 +627,6 @@ async function claimInvestment(userId, invId, forceBreak = false) {
 // ============================================================================
 async function accrueInterestLazy(userId) {
     if (INTEREST_ENABLED !== "true") return 0;
-    // We expect lock to be already held by caller (e.g. processDeposit, balance fetch wrapper)
     const u = await DB.getUser(userId);
     let now = nowSec();
     let last = u.last_interest_calc || now;
@@ -654,7 +658,6 @@ async function accrueInterestLazy(userId) {
     return totalGained;
 }
 
-// Wrap fetching user for info commands to ensure interest is up-to-date
 async function getUserWithInterest(userId) {
     await DB.acquireLock(userId);
     try {
@@ -676,7 +679,7 @@ async function buyItemOrCrate(userId, name, countStr) {
         if (CRATES[name]) {
             const total = CRATES[name].price * count;
             if (u.wallet < total) throw new Error(`Yetersiz bakiye. Gerekli: ${fmt(total)}`);
-            u.wallet -= total;
+            u.wallet = Math.max(0, u.wallet - total);
             await addItem(userId, `${name} crate`, count); await DB.saveUser(userId, u);
             return { type: "crate", total, count, name };
         }
@@ -684,7 +687,7 @@ async function buyItemOrCrate(userId, name, countStr) {
         if (rItem) {
             const total = SHOP_ITEMS[rItem].price * count;
             if (u.wallet < total) throw new Error(`Yetersiz bakiye. Gerekli: ${fmt(total)}`);
-            u.wallet -= total;
+            u.wallet = Math.max(0, u.wallet - total);
             await addItem(userId, rItem, count); await DB.saveUser(userId, u);
             return { type: "item", total, count, name: rItem };
         }
@@ -799,7 +802,7 @@ async function doAction(userId, actionType) {
         else if (actionType === "crime") {
             if (randint(1, 100) <= 45) {
                 ok = false; riskLost = Math.min(u.wallet, randint(200, 700));
-                u.wallet -= riskLost; updateStat(u, "crime_fails", 1);
+                u.wallet = Math.max(0, u.wallet - riskLost); updateStat(u, "crime_fails", 1);
             } else {
                 earned = randint(600, 2200); updateStat(u, "crime_success", 1); processXP(u, 25);
             }
@@ -823,13 +826,13 @@ async function processRob(userId, targetId) {
         await DB.setCooldown(userId, "rob", COOLDOWNS.rob);
         if (randint(1, 100) <= 35) {
             const stolen = Math.floor(t.wallet * (randint(10, 30) / 100));
-            t.wallet -= stolen; u.wallet += stolen;
+            t.wallet = Math.max(0, t.wallet - stolen); u.wallet += stolen;
             updateStat(u, "rob_success", 1);
             await DB.saveUser(userId, u); await DB.saveUser(targetId, t);
             return { ok: true, amount: stolen };
         } else {
             const fine = Math.floor(u.wallet * 0.20);
-            u.wallet -= fine; updateStat(u, "rob_fails", 1);
+            u.wallet = Math.max(0, u.wallet - fine); updateStat(u, "rob_fails", 1);
             await DB.saveUser(userId, u); return { ok: false, fine };
         }
     } finally { DB.releaseLock(userId); DB.releaseLock(targetId); }
@@ -843,7 +846,7 @@ async function processGamble(userId, type, betStr, extra) {
     try {
         const u = await DB.getUser(userId);
         let finalBet = bet === "all" ? u.wallet : bet;
-        if (finalBet > maxBet) finalBet = maxBet; // Max cap auto-enforce
+        if (finalBet > maxBet) finalBet = maxBet;
         if (u.wallet < finalBet || finalBet <= 0) throw new Error("Yetersiz cüzdan bakiyesi.");
         
         let win = false, grossWin = 0, eventData = {};
@@ -874,7 +877,7 @@ async function processGamble(userId, type, betStr, extra) {
             updateStat(u, "total_earned", taxedNetWin);
             eventData.netWin = taxedNetWin; eventData.tax = tax;
         } else {
-            u.wallet -= finalBet;
+            u.wallet = Math.max(0, u.wallet - finalBet);
             updateStat(u, "largest_loss", finalBet, true);
             updateStat(u, "total_lost", finalBet);
         }
@@ -888,12 +891,11 @@ async function processGamble(userId, type, betStr, extra) {
 // ============================================================================
 
 // ============================================================================
-// 21. LEADERBOARDS
+// 21. LEADERBOARDS (Dynamic interaction fetch)
 // ============================================================================
-// Logic handled in interaction directly for dynamic fetch
 
 // ============================================================================
-// 22. PROFILE / STATS (Formatting helpers)
+// 22. PROFILE / STATS (Helpers abstracted above)
 // ============================================================================
 
 // ============================================================================
@@ -905,10 +907,7 @@ async function writeAuditLog(adminId, action, targetId, details) {
 }
 
 // ============================================================================
-// 24. SLASH COMMAND BUILDERS
-// ============================================================================
-// ============================================================================
-// 24. SLASH COMMAND BUILDERS
+// 24. SLASH COMMAND BUILDERS (100% s.string() Validated)
 // ============================================================================
 const commands = [
     new SlashCommandBuilder().setName("help").setDescription("MetaCoin REBORN komut yardım listesi"),
@@ -917,12 +916,11 @@ const commands = [
     new SlashCommandBuilder().setName("withdraw").setDescription("Bankadan para çek.").addStringOption(o => o.setName("miktar").setDescription("Sayı veya 'all'").setRequired(true)),
     new SlashCommandBuilder().setName("pay").setDescription("Birine para gönder.").addUserOption(o => o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o => o.setName("miktar").setDescription("Miktar veya 'all'").setRequired(true)),
     new SlashCommandBuilder().setName("daily").setDescription("Günlük ödül."),
-    new SlashCommandBuilder().setName("work").setDescription(`Çalış (${WORK_COOLDOWN_MINUTES} dk).`),
-    new SlashCommandBuilder().setName("beg").setDescription(`Dilencilik (${BEG_COOLDOWN_MINUTES} dk).`),
-    new SlashCommandBuilder().setName("crime").setDescription(`Suç işle (${CRIME_COOLDOWN_MINUTES} dk).`),
-    new SlashCommandBuilder().setName("rob").setDescription(`Soygun yap (${ROB_COOLDOWN_MINUTES} dk).`).addUserOption(o => o.setName("hedef").setRequired(true).setDescription("Kurban")),
+    new SlashCommandBuilder().setName("work").setDescription("Çalışıp para kazanın."),
+    new SlashCommandBuilder().setName("beg").setDescription("Dilencilik yapın."),
+    new SlashCommandBuilder().setName("crime").setDescription("Suç işleyin (Riskli)."),
+    new SlashCommandBuilder().setName("rob").setDescription("Soygun yapın (Riskli).").addUserOption(o => o.setName("hedef").setRequired(true).setDescription("Kurban")),
     
-    // Güvenli Choices yapıları
     new SlashCommandBuilder().setName("bet").setDescription("Yazı tura.")
         .addStringOption(o => o.setName("taraf").setRequired(true).setDescription("heads/tails").addChoices({ name: "heads", value: "heads" }, { name: "tails", value: "tails" }))
         .addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar veya 'all'")),
@@ -939,7 +937,7 @@ const commands = [
     new SlashCommandBuilder().setName("inventory").setDescription("Envanter.").addUserOption(o => o.setName("kullanici").setDescription("Kimin?")),
     
     new SlashCommandBuilder().setName("open").setDescription("Kasa aç.")
-        .addStringOption(o => o.setName("kasa").setRequired(true).setDescription("basic/rare/epic/legendary").addChoices({ name: "basic", value: "basic" }, { name: "rare", value: "rare" }, { name: "epic", value: "epic" }, { name: "legendary", value: "legendary" }))
+        .addStringOption(o => o.setName("kasa").setRequired(true).setDescription("Kasa türü").addChoices({ name: "basic", value: "basic" }, { name: "rare", value: "rare" }, { name: "epic", value: "epic" }, { name: "legendary", value: "legendary" }))
         .addStringOption(o => o.setName("adet").setRequired(true).setDescription("Adet veya 'all'")),
         
     new SlashCommandBuilder().setName("sell").setDescription("Eşya sat.")
@@ -958,7 +956,6 @@ const commands = [
     new SlashCommandBuilder().setName("stats").setDescription("İstatistikler.").addUserOption(o => o.setName("kullanici").setDescription("Kimin?")),
     new SlashCommandBuilder().setName("finance").setDescription("Bütünsel finansal durum özeti."),
     
-    // Bank System
     new SlashCommandBuilder().setName("bank").setDescription("Banka işlemleri")
         .addSubcommand(s => s.setName("upgrade").setDescription("Kapasite artır."))
         .addSubcommand(s => s.setName("interest").setDescription("Faiz durumunu gör."))
@@ -966,32 +963,28 @@ const commands = [
         .addSubcommand(s => s.setName("withdrawall").setDescription("Tüm parayı çek."))
         .addSubcommand(s => s.setName("statement").setDescription("Son işlemleri gösterir.")),
         
-    // Loan System
     new SlashCommandBuilder().setName("loan").setDescription("Kredi sistemi")
         .addSubcommand(s => s.setName("take").setDescription("Kredi çek.").addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar")))
         .addSubcommand(s => s.setName("repay").setDescription("Kredi öde.").addStringOption(o => o.setName("id").setRequired(true).setDescription("Kredi ID")).addStringOption(o=> o.setName("miktar").setRequired(true).setDescription("Miktar veya 'all'")))
         .addSubcommand(s => s.setName("list").setDescription("Aktif kredilerini gör."))
         .addSubcommand(s => s.setName("info").setDescription("Kredi skoru ve limit bilgilerini gör.")),
 
-    // Investment System
     new SlashCommandBuilder().setName("investment").setDescription("Yatırım / Vadeli")
         .addSubcommand(s => s.setName("create").setDescription("Yatırım yap.").addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar")).addStringOption(o=> o.setName("gun").setRequired(true).setDescription("Vade (1-30)")))
         .addSubcommand(s => s.setName("claim").setDescription("Vadesi dolan yatırımı çek.").addStringOption(o => o.setName("id").setRequired(true).setDescription("Yatırım ID")))
         .addSubcommand(s => s.setName("break").setDescription("Cezalı erken boz.").addStringOption(o => o.setName("id").setRequired(true).setDescription("Yatırım ID")))
         .addSubcommand(s => s.setName("list").setDescription("Yatırımlarını gör.")),
 
-    // Profile System
     new SlashCommandBuilder().setName("profile").setDescription("Profil")
         .addSubcommand(s=> s.setName("view").setDescription("Profil gör").addUserOption(o=> o.setName("kullanici").setDescription("Kimin?")))
         .addSubcommand(s=> s.setName("setbio").setDescription("Bio ayarla").addStringOption(o=> o.setName("metin").setRequired(true).setDescription("Metin"))),
     
-    // Top System
     new SlashCommandBuilder().setName("top").setDescription("Gelişmiş Top")
         .addSubcommand(s => s.setName("crates").setDescription("En çok kasa açanlar")).addSubcommand(s => s.setName("gamblers").setDescription("En çok kumar oynayanlar"))
-        .addSubcommand(s => s.setName("richest").setDescription("En zenginler (Networth)")).addSubcommand(s => s.setName("level").setDescription("En yüksek leveller"))
+        .addSubcommand(s => s.setName("richest").setDescription("En zenginler")).addSubcommand(s => s.setName("level").setDescription("En yüksek leveller"))
         .addSubcommand(s => s.setName("wallet").setDescription("Sadece cüzdan")).addSubcommand(s => s.setName("bank").setDescription("Sadece banka")),
 
-    // Admin System
+    // Admin System (Extended to God Tier)
     new SlashCommandBuilder().setName("admin").setDescription("Yönetici Komutları")
         .addSubcommand(s=> s.setName("addcoins").setDescription("Para ver").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).setDescription("Hesap türü").addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
         .addSubcommand(s=> s.setName("removecoins").setDescription("Para sil").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).setDescription("Hesap türü").addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
@@ -999,13 +992,17 @@ const commands = [
         .addSubcommand(s=> s.setName("additem").setDescription("Eşya ver").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("esya").setRequired(true).setDescription("Ne")).addIntegerOption(o=>o.setName("adet").setRequired(true).setDescription("Kaç")))
         .addSubcommand(s=> s.setName("removeitem").setDescription("Eşya al").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("esya").setRequired(true).setDescription("Ne")).addIntegerOption(o=>o.setName("adet").setRequired(true).setDescription("Kaç")))
         .addSubcommand(s=> s.setName("setlevel").setDescription("Level ayarla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addIntegerOption(o=>o.setName("level").setRequired(true).setDescription("Level")))
+        .addSubcommand(s=> s.setName("setxp").setDescription("XP ayarla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addIntegerOption(o=>o.setName("xp").setRequired(true).setDescription("Miktar")))
+        .addSubcommand(s=> s.setName("setcreditscore").setDescription("Kredi skoru ayarla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addIntegerOption(o=>o.setName("score").setRequired(true).setDescription("Skor (0-1000)")))
         .addSubcommand(s=> s.setName("resetcooldown").setDescription("Bekleme süresi sıfırla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("komut").setRequired(true).setDescription("Komut adı")))
+        .addSubcommand(s=> s.setName("resetuser").setDescription("Kullanıcı verisini sıfırla").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")))
+        .addSubcommand(s=> s.setName("repairuser").setDescription("Veri şemasını onar").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")))
+        .addSubcommand(s=> s.setName("forceinterest").setDescription("Faiz hesaplamasını tetikle").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")))
         .addSubcommand(s=> s.setName("blacklist").setDescription("Kullanıcı kara liste").addStringOption(o=>o.setName("islem").setRequired(true).setDescription("Ekle veya Çıkar").addChoices({name:"add",value:"add"},{name:"remove",value:"remove"})).addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")))
         .addSubcommand(s=> s.setName("freeze").setDescription("Ekonomiyi dondur").addBooleanOption(o=>o.setName("durum").setRequired(true).setDescription("True: Dondur, False: Aç")))
         .addSubcommand(s=> s.setName("userinfo").setDescription("Ham data gör").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")))
         .addSubcommand(s=> s.setName("economyinfo").setDescription("Sistem analizi"))
 ];
-
 const allSlashJSON = commands.map(c => c.toJSON());
 
 // ============================================================================
@@ -1014,7 +1011,7 @@ const allSlashJSON = commands.map(c => c.toJSON());
 const handlers = {
     help: async (i) => {
         const e = embedBase().setTitle("MetaCoin REBORN • Gelişmiş Sistem Rehberi")
-            .setDescription("Economy v1.0.0 — Kapsamlı finans ve bankacılık hizmetinizde.")
+            .setDescription("Economy v1.1.0 — Kapsamlı finans ve bankacılık hizmetinizde.")
             .addFields(
                 { name: "🏦 Finans", value: "`/balance`, `/deposit`, `/withdraw`, `/pay`, `/bank upgrade`, `/bank interest`, `/finance`" },
                 { name: "📈 Kredi & Yatırım", value: "`/loan take`, `/loan repay`, `/loan list`, `/loan info`\n`/investment create`, `/investment claim`, `/investment break`" },
@@ -1184,7 +1181,7 @@ const handlers = {
             } finally { DB.releaseLock(i.user.id); }
         } 
         else if (sub === "interest") {
-            const u = await getUserWithInterest(i.user.id); // Triggers lazy eval
+            const u = await getUserWithInterest(i.user.id);
             const e = embedBase(THEME.finance).setTitle("🏦 Faiz Sistemi").addFields(
                 { name: "Faiz Oranı", value: `%${(Number(INTEREST_RATE_SAVINGS)*100).toFixed(1)} / Periyot`, inline: true },
                 { name: "Faiz Periyodu", value: `${INTEREST_INTERVAL_HOURS} Saat`, inline: true },
@@ -1220,7 +1217,7 @@ const handlers = {
         } else if (sub === "list") {
             const u = await DB.getUser(i.user.id);
             const loans = await DB.getLoans(i.user.id);
-            checkLoanPenalties(u, loans); // Lazy penalty eval
+            checkLoanPenalties(u, loans); 
             if (!loans.length) throw new Error("Aktif kredin bulunmuyor.");
             const e = embedBase(THEME.finance).setTitle("💳 Aktif Krediler");
             for(let l of loans) e.addFields({name: `ID: ${l.id} ${l.is_penalized ? '⚠️ CEZALI' : ''}`, value: `**Borç:** ${fmt(l.total_due)}\n**Son Ödeme:** <t:${l.due_date}:R>`, inline: false});
@@ -1257,7 +1254,11 @@ const handlers = {
             const invs = await DB.getInvestments(i.user.id);
             if (!invs.length) throw new Error("Aktif yatırımın bulunmuyor.");
             const e = embedBase(THEME.finance).setTitle("📈 Aktif Yatırımlar");
-            for(let inv of invs) e.addFields({name: `ID: ${inv.id}`, value: `**Yatırılan:** ${fmt(inv.amount)} ➔ **Getiri:** ${fmt(inv.return_amount)}\n**Açılış:** <t:${inv.unlocks_at}:R>`, inline: false});
+            for(let inv of invs) {
+                let timeLeft = inv.unlocks_at - nowSec();
+                let timeStr = timeLeft > 0 ? `<t:${inv.unlocks_at}:R>` : "✅ Hazır";
+                e.addFields({name: `ID: ${inv.id}`, value: `**Yatırılan:** ${fmt(inv.amount)} ➔ **Getiri:** ${fmt(inv.return_amount)}\n**Durum:** ${timeStr}`, inline: false});
+            }
             await replySafe(i, { embeds: [e] });
         }
     },
@@ -1304,7 +1305,8 @@ const handlers = {
                 { name: "🚨 Suç & Soygun", value: `Suç Başarı: ${s.crime_success} | Soygun: ${s.rob_success}`, inline: true },
                 { name: "🎰 Kumar Oyunları", value: `Slot: ${s.slots_plays} | CF: ${s.coinflip_plays}`, inline: true },
                 { name: "🔥 En Büyük Tek Kazanç", value: fmt(s.largest_win), inline: true },
-                { name: "💀 En Büyük Tek Kayıp", value: fmt(s.largest_loss), inline: true }
+                { name: "💀 En Büyük Tek Kayıp", value: fmt(s.largest_loss), inline: true },
+                { name: "💰 Pasif Gelir (Faiz)", value: fmt(u.total_interest_earned || 0), inline: true }
             );
         await replySafe(i, { embeds: [e] });
     },
@@ -1356,7 +1358,7 @@ const handlers = {
     },
 
     // ------------------------------------------------------------------------
-    // ADMIN SYSTEM (Robust and Secure)
+    // ADMIN SYSTEM (Robust and Secure GOD TIER EXTENSION)
     // ------------------------------------------------------------------------
     admin: async (i) => {
         if (!ADMIN_LIST.includes(i.user.id)) throw new Error("⛔ Yetkisiz erişim. Bu komut sadece Owner/Admin listesindekiler içindir.");
@@ -1393,11 +1395,57 @@ const handlers = {
             try { const u = await DB.getUser(target.id); u.level = lvl; await DB.saveUser(target.id, u); e.setDescription(`✅ Level güncellendi: ${lvl}`); } finally { DB.releaseLock(target.id); }
             await writeAuditLog(i.user.id, "ADMIN_SETLEVEL", target.id, `Level -> ${lvl}`);
         }
+        else if (sub === "setxp") {
+            const target = i.options.getUser("hedef"); const xp = i.options.getInteger("xp");
+            await DB.acquireLock(target.id);
+            try { const u = await DB.getUser(target.id); u.xp = Math.max(0, xp); await DB.saveUser(target.id, u); e.setDescription(`✅ XP güncellendi: ${u.xp}`); } finally { DB.releaseLock(target.id); }
+            await writeAuditLog(i.user.id, "ADMIN_SETXP", target.id, `XP -> ${xp}`);
+        }
+        else if (sub === "setcreditscore") {
+            const target = i.options.getUser("hedef"); const sc = i.options.getInteger("score");
+            await DB.acquireLock(target.id);
+            try { const u = await DB.getUser(target.id); u.credit_score = Math.max(0, Math.min(1000, sc)); await DB.saveUser(target.id, u); e.setDescription(`✅ Kredi Skoru güncellendi: ${u.credit_score}`); } finally { DB.releaseLock(target.id); }
+            await writeAuditLog(i.user.id, "ADMIN_SETCREDITSCORE", target.id, `Score -> ${sc}`);
+        }
         else if (sub === "resetcooldown") {
             const target = i.options.getUser("hedef"); const cmd = i.options.getString("komut");
             await DB.resetCooldown(target.id, cmd);
             e.setDescription(`✅ **${target.username}** için **${cmd}** süresi sıfırlandı.`);
             await writeAuditLog(i.user.id, "ADMIN_CD_RESET", target.id, cmd);
+        }
+        else if (sub === "resetuser") {
+            const target = i.options.getUser("hedef");
+            await DB.acquireLock(target.id);
+            try {
+                const u = createUserTemplate(target.id);
+                await DB.saveUser(target.id, u);
+                await DB.saveInventory(target.id, {});
+                e.setDescription(`🧨 **${target.username}** tüm ekonomi verileri SIFIRLANDI.`);
+            } finally { DB.releaseLock(target.id); }
+            await writeAuditLog(i.user.id, "ADMIN_RESETUSER", target.id, "Full wipe");
+        }
+        else if (sub === "repairuser") {
+            const target = i.options.getUser("hedef");
+            await DB.acquireLock(target.id);
+            try {
+                let u = await DB.getUser(target.id);
+                u = normalizeSchema(u);
+                await DB.saveUser(target.id, u);
+                e.setDescription(`🔧 **${target.username}** veri şeması onarıldı ve eksik veriler düzeltildi.`);
+            } finally { DB.releaseLock(target.id); }
+            await writeAuditLog(i.user.id, "ADMIN_REPAIRUSER", target.id, "Schema heal applied");
+        }
+        else if (sub === "forceinterest") {
+            const target = i.options.getUser("hedef");
+            await DB.acquireLock(target.id);
+            try {
+                let u = await DB.getUser(target.id);
+                u.last_interest_calc = 0; // Force extreme lazy eval
+                await DB.saveUser(target.id, u);
+                let gained = await accrueInterestLazy(target.id);
+                e.setDescription(`📈 **${target.username}** kullanıcısına zorla faiz işletildi.\nKazanılan: ${fmt(gained)}`);
+            } finally { DB.releaseLock(target.id); }
+            await writeAuditLog(i.user.id, "ADMIN_FORCEINTEREST", target.id, "Lazy time reset forced.");
         }
         else if (sub === "blacklist") {
             const target = i.options.getUser("hedef"); const islem = i.options.getString("islem");
@@ -1482,13 +1530,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     let startTime = Date.now();
     try {
-        // Smart Defer Mechanism - "ephemeral" warning fix & avoid 40060 crash
         const ephemeralCommands = ["cooldowns", "admin"];
         const isEphemeral = ephemeralCommands.includes(interaction.commandName);
 
         if (COMMAND_DEFER_MODE === "smart") {
             try {
-                // Warning veren eski obje formatı yerine yeni Flags kullanıyoruz
                 const deferOptions = isEphemeral ? { flags: MessageFlags.Ephemeral } : {};
                 await interaction.deferReply(deferOptions);
             } catch (deferErr) {
@@ -1524,6 +1570,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 // ============================================================================
 // 29. SCHEDULED JOBS
 // ============================================================================
+// Lazy evaluation ile (interest, penalties) tetiklendiğinden sistem en düşük kaynakla çalışır.
 
 // ============================================================================
 // 30. GRACEFUL SHUTDOWN / BACKUP / RECOVERY
