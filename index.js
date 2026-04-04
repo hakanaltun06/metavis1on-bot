@@ -1,526 +1,550 @@
 /**
  * ============================================================================
- * 1. IMPORTS & REQUIRE
+ * PROFESYONEL DISCORD MÜZİK BOTU (TEK DOSYA MİMARİSİ)
+ * ============================================================================
+ * Geliştirici Notu: Bu dosya fiziksel olarak tek parça olsa da, mantıksal
+ * olarak modüler bir yapıya sahiptir. Bölümler arası geçişler net olarak
+ * belirtilmiştir.
  * ============================================================================
  */
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, REST, Routes, Colors } = require('discord.js');
-const admin = require('firebase-admin');
+
+// ============================================================================
+// 1. IMPORT VE YAPILANDIRMA BÖLÜMÜ
+// ============================================================================
+require('dotenv').config();
+const { 
+    Client, GatewayIntentBits, Partials, Collection, EmbedBuilder, 
+    ActionRowBuilder, ButtonBuilder, ButtonStyle, REST, Routes, 
+    SlashCommandBuilder 
+} = require('discord.js');
+const { 
+    joinVoiceChannel, createAudioPlayer, createAudioResource, 
+    entersState, StreamType, AudioPlayerStatus, VoiceConnectionStatus, 
+    getVoiceConnection 
+} = require('@discordjs/voice');
+const play = require('play-dl');
 const express = require('express');
-const dotenv = require('dotenv');
 
-/**
- * ============================================================================
- * 2. DOTENV & CONFIG YÖNETİMİ
- * ============================================================================
- */
-dotenv.config();
-
+// ============================================================================
+// 2. CONFIG VE SABİTLER
+// ============================================================================
 const CONFIG = {
-    DISCORD: {
-        TOKEN: process.env.DISCORD_TOKEN,
-        CLIENT_ID: process.env.CLIENT_ID,
-        GUILD_ID: process.env.GUILD_ID,
-        REGISTER: process.env.REGISTER_COMMANDS === 'true'
-    },
-    SERVER: {
-        PORT: process.env.PORT || 3000
-    },
-    FIREBASE: {
-        PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
-        CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
-        PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') : null
-    },
-    ECONOMY: {
-        NAME: process.env.ECONOMY_CURRENCY_NAME || 'MetaCoin',
-        SYMBOL: process.env.ECONOMY_CURRENCY_SYMBOL || 'MC',
-        START_WALLET: Number(process.env.STARTING_WALLET) || 0,
-        START_BANK: Number(process.env.STARTING_BANK) || 0,
-        START_BANK_MAX: Number(process.env.STARTING_BANK_MAX) || 50000
-    },
-    COOLDOWNS: {
-        DAILY: (Number(process.env.DAILY_COOLDOWN_HOURS) || 20) * 60 * 60 * 1000,
-        WORK: (Number(process.env.WORK_COOLDOWN_MINUTES) || 30) * 60 * 1000,
-        BEG: (Number(process.env.BEG_COOLDOWN_MINUTES) || 2) * 60 * 1000,
-        CRIME: (Number(process.env.CRIME_COOLDOWN_MINUTES) || 10) * 60 * 1000,
-        ROB: (Number(process.env.ROB_COOLDOWN_MINUTES) || 60) * 60 * 1000
-    },
-    UI: {
-        COLORS: {
-            PRIMARY: 0xFFD700, // Premium Altın Rengi
-            SUCCESS: 0x2ECC71,
-            ERROR: 0xE74C3C,
-            INFO: 0x3498DB
-        }
+    TOKEN: process.env.DISCORD_TOKEN,
+    CLIENT_ID: process.env.CLIENT_ID,
+    GUILD_ID: process.env.GUILD_ID,
+    PORT: process.env.PORT || 3000,
+    REGISTER_COMMANDS: process.env.REGISTER_COMMANDS === 'true',
+    DEFAULT_VOLUME: parseInt(process.env.DEFAULT_VOLUME) || 70,
+    MAX_QUEUE_SIZE: parseInt(process.env.MAX_QUEUE_SIZE) || 100,
+    COLORS: {
+        PRIMARY: '#5865F2', // Discord Blurple
+        SUCCESS: '#43B581', // Yeşil
+        ERROR: '#F04747',   // Kırmızı
+        INFO: '#FEE75C',    // Sarı
+        PREMIUM: '#9B59B6'  // Mor
     }
 };
 
-/**
- * ============================================================================
- * 3. HEALTH ENDPOINT (EXPRESS)
- * ============================================================================
- */
+// ============================================================================
+// 3. EXPRESS HEALTH ENDPOINT
+// ============================================================================
 const app = express();
-app.get('/health', (req, res) => res.status(200).json({ status: 'Online', service: 'MetaCoin Discord Bot' }));
-app.listen(CONFIG.SERVER.PORT, () => console.log(`[SERVER] Health endpoint aktif: Port ${CONFIG.SERVER.PORT}`));
-
-/**
- * ============================================================================
- * 4. FIRESTORE BAĞLANTISI
- * ============================================================================
- */
-if (!admin.apps.length) {
-    try {
-        admin.initializeApp({
-            credential: admin.credential.cert({
-                projectId: CONFIG.FIREBASE.PROJECT_ID,
-                clientEmail: CONFIG.FIREBASE.CLIENT_EMAIL,
-                privateKey: CONFIG.FIREBASE.PRIVATE_KEY
-            })
-        });
-        console.log('[DATABASE] Firestore bağlantısı başarılı.');
-    } catch (error) {
-        console.error('[DATABASE] Firestore başlatılamadı. .env ayarlarınızı kontrol edin.', error.message);
-        process.exit(1);
-    }
-}
-const db = admin.firestore();
-
-/**
- * ============================================================================
- * 5. SABİTLER / MARKET İÇERİĞİ
- * ============================================================================
- */
-const SHOP_ITEMS = [
-    { id: 'kucuk_kasa', name: 'Küçük Kasa', price: 2500, desc: 'İçinden sürpriz miktarda para çıkar.', category: 'Kasa' },
-    { id: 'banka_belgesi', name: 'Banka Genişletme Belgesi', price: 15000, desc: 'Banka limitinizi 25.000 MC artırır.', category: 'Yükseltme' },
-    { id: 'xp_karti', name: 'Premium XP Kartı', price: 5000, desc: 'Profilinize 500 XP ekler.', category: 'Güçlendirici' }
-];
-
-/**
- * ============================================================================
- * 6. YARDIMCI FONKSİYONLAR & UI
- * ============================================================================
- */
-const formatMoney = (amount) => `**${amount.toLocaleString('tr-TR')} ${CONFIG.ECONOMY.SYMBOL}**`;
-const getLevelTarget = (level) => level * level * 100;
-
-const createEmbed = (title, description, color, user) => {
-    return new EmbedBuilder()
-        .setTitle(title)
-        .setDescription(description)
-        .setColor(color)
-        .setTimestamp()
-        .setFooter({ text: `MetaCoin Ekonomi Sistemi • İstek: ${user.username}`, iconURL: user.displayAvatarURL() });
-};
-
-const UI = {
-    Success: (msg, user) => createEmbed('✅ İşlem Başarılı', msg, CONFIG.UI.COLORS.SUCCESS, user),
-    Error: (msg, user) => createEmbed('❌ Hata', msg, CONFIG.UI.COLORS.ERROR, user),
-    Info: (title, msg, user) => createEmbed(title, msg, CONFIG.UI.COLORS.PRIMARY, user)
-};
-
-/**
- * ============================================================================
- * 7. VERİTABANI: KULLANICI SERVİSİ
- * ============================================================================
- */
-const getDefaultUser = () => ({
-    wallet: CONFIG.ECONOMY.START_WALLET,
-    bank: CONFIG.ECONOMY.START_BANK,
-    bankMax: CONFIG.ECONOMY.START_BANK_MAX,
-    xp: 0,
-    level: 1,
-    inventory: {},
-    cooldowns: {},
-    stats: {
-        gunlukKullanim: 0, calismaSayisi: 0, dilenmeSayisi: 0, sucGirisimSayisi: 0, soyGirisimSayisi: 0,
-        toplamKazanilan: 0, toplamKaybedilen: 0, marketAlimSayisi: 0
-    },
-    flags: { blacklisted: false, frozen: false },
-    createdAt: Date.now(),
-    updatedAt: Date.now()
+app.get('/health', (req, res) => {
+    res.json({ status: 'UP', message: 'Discord Müzik Botu çalışıyor.', timestamp: new Date() });
+});
+app.listen(CONFIG.PORT, () => {
+    console.log(`[EXPRESS] Health endpoint port ${CONFIG.PORT} üzerinde aktif.`);
 });
 
-async function getUserData(userId) {
-    const ref = db.collection('users').doc(userId);
-    const doc = await ref.get();
-    let data = getDefaultUser();
-
-    if (doc.exists) {
-        const dbData = doc.data();
-        // Eksik alanları default ile tamamla (Normalize)
-        data = { ...data, ...dbData, stats: { ...data.stats, ...(dbData.stats || {}) }, flags: { ...data.flags, ...(dbData.flags || {}) } };
-    }
-    return { ref, data };
-}
+// ============================================================================
+// 4. MÜZİK KUYRUĞU (QUEUE) VERİ YAPISI
+// ============================================================================
+// Sunucu bazlı oynatıcıları ve kuyrukları tutacak ana harita
+const queueMap = new Map();
 
 /**
- * ============================================================================
- * 8. EKONOMİ & XP SERVİSLERİ
- * ============================================================================
- */
-async function addXP(data, amount) {
-    data.xp += amount;
-    const target = getLevelTarget(data.level);
-    let leveledUp = false;
-    if (data.xp >= target) {
-        data.level += 1;
-        leveledUp = true;
-    }
-    return leveledUp;
-}
-
-/**
- * ============================================================================
- * 9. COOLDOWN SERVİSİ
- * ============================================================================
- */
-function checkCooldown(data, type) {
-    const lastUsed = data.cooldowns[type] || 0;
-    const cooldownTime = CONFIG.COOLDOWNS[type.toUpperCase()];
-    const timeLeft = (lastUsed + cooldownTime) - Date.now();
-    
-    if (timeLeft > 0) {
-        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-        let timeString = '';
-        if (hours > 0) timeString += `${hours} saat `;
-        if (minutes > 0) timeString += `${minutes} dakika `;
-        timeString += `${seconds} saniye`;
-        return { onCooldown: true, timeString };
-    }
-    return { onCooldown: false };
-}
-
-function setCooldown(data, type) {
-    if (!data.cooldowns) data.cooldowns = {};
-    data.cooldowns[type] = Date.now();
-}
-
-/**
- * ============================================================================
- * 10. KOMUT İŞLEYİCİLERİ (HANDLERS)
- * ============================================================================
+ * Kuyruk yapısı şablonu:
+ * {
+ * textChannel: TextChannel,
+ * voiceChannel: VoiceChannel,
+ * connection: VoiceConnection,
+ * player: AudioPlayer,
+ * songs: Array<{title, url, duration, thumbnail, requester}>,
+ * volume: number,
+ * playing: boolean,
+ * loopMode: 'KAPALI' | 'SARKI' | 'KUYRUK',
+ * currentSong: Object | null
+ * }
  */
 
-async function handleBakiye(interaction, data) {
-    const targetUser = interaction.options.getUser('kullanici') || interaction.user;
-    let userData = data;
+// ============================================================================
+// 5. DISCORD UI VE YARDIMCI FONKSİYONLAR (EMBED ÜRETİCİLERİ)
+// ============================================================================
+const UI = {
+    Success: (desc) => new EmbedBuilder().setColor(CONFIG.COLORS.SUCCESS).setDescription(`✅ | ${desc}`),
+    Error: (desc) => new EmbedBuilder().setColor(CONFIG.COLORS.ERROR).setDescription(`❌ | ${desc}`),
+    Info: (desc) => new EmbedBuilder().setColor(CONFIG.COLORS.INFO).setDescription(`ℹ️ | ${desc}`),
+    Premium: (title, desc) => new EmbedBuilder().setColor(CONFIG.COLORS.PREMIUM).setTitle(title).setDescription(desc),
     
-    if (targetUser.id !== interaction.user.id) {
-        const { data: targetData } = await getUserData(targetUser.id);
-        userData = targetData;
+    NowPlaying: (song) => {
+        return new EmbedBuilder()
+            .setColor(CONFIG.COLORS.PRIMARY)
+            .setAuthor({ name: '🎵 Şu An Çalıyor' })
+            .setTitle(song.title)
+            .setURL(song.url)
+            .setThumbnail(song.thumbnail)
+            .addFields(
+                { name: 'Süre', value: song.duration, inline: true },
+                { name: 'İsteyen', value: `<@${song.requester.id}>`, inline: true }
+            )
+            .setFooter({ text: 'Modern Müzik Sistemi' })
+            .setTimestamp();
+    },
+
+    QueueList: (serverQueue) => {
+        if (!serverQueue.songs.length && !serverQueue.currentSong) {
+            return UI.Info('Kuyruk şu an boş.');
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(CONFIG.COLORS.PRIMARY)
+            .setTitle('🎶 Sunucu Müzik Kuyruğu')
+            .setFooter({ text: `Döngü: ${serverQueue.loopMode} | Ses: %${serverQueue.volume}` });
+
+        let desc = '';
+        if (serverQueue.currentSong) {
+            desc += `**▶️ Şu An Çalan:**\n[${serverQueue.currentSong.title}](${serverQueue.currentSong.url}) | \`${serverQueue.currentSong.duration}\`\n\n`;
+        }
+
+        if (serverQueue.songs.length > 0) {
+            desc += `**⏳ Sıradakiler:**\n`;
+            const max = Math.min(serverQueue.songs.length, 10);
+            for (let i = 0; i < max; i++) {
+                desc += `**${i + 1}.** [${serverQueue.songs[i].title}](${serverQueue.songs[i].url}) | \`${serverQueue.songs[i].duration}\`\n`;
+            }
+            if (serverQueue.songs.length > 10) {
+                desc += `\n*...ve ${serverQueue.songs.length - 10} şarkı daha.*`;
+            }
+        } else {
+            desc += `*Sırada bekleyen şarkı yok.*`;
+        }
+
+        embed.setDescription(desc);
+        return embed;
+    }
+};
+
+// Ses kanalında olup olmadığını kontrol eden yardımcı fonksiyon
+function checkVoiceRequirements(interaction, requireBotInVoice = false) {
+    const userVoice = interaction.member.voice.channel;
+    if (!userVoice) {
+        interaction.reply({ embeds: [UI.Error('Bu komutu kullanmak için bir ses kanalında olmalısınız.')], ephemeral: true });
+        return false;
     }
 
-    const total = userData.wallet + userData.bank;
-    const embed = UI.Info(`💳 ${targetUser.username} - Bakiye`, 
-        `**Cüzdan:** ${formatMoney(userData.wallet)}\n**Banka:** ${formatMoney(userData.bank)} / ${formatMoney(userData.bankMax)}\n\n**Toplam Servet:** ${formatMoney(total)}`, 
-        interaction.user);
-    await interaction.editReply({ embeds: [embed] });
-}
-
-async function handleGunluk(interaction, data, ref) {
-    const cd = checkCooldown(data, 'daily');
-    if (cd.onCooldown) return interaction.editReply({ embeds: [UI.Error(`Günlük ödülünü zaten aldın. Lütfen **${cd.timeString}** bekle.`, interaction.user)] });
-
-    const reward = Math.floor(Math.random() * 500) + 1000; // 1000-1500 arası
-    data.wallet += reward;
-    data.stats.gunlukKullanim += 1;
-    data.stats.toplamKazanilan += reward;
-    setCooldown(data, 'daily');
-    await addXP(data, 15);
-
-    await ref.set(data);
-    await interaction.editReply({ embeds: [UI.Success(`Günlük ödülünü topladın! Cüzdanına ${formatMoney(reward)} eklendi.`, interaction.user)] });
-}
-
-async function handleCalis(interaction, data, ref) {
-    const cd = checkCooldown(data, 'work');
-    if (cd.onCooldown) return interaction.editReply({ embeds: [UI.Error(`Şu an çok yorgunsun. Çalışmak için **${cd.timeString}** dinlenmelisin.`, interaction.user)] });
-
-    const reward = Math.floor(Math.random() * 300) + 200; // 200-500 arası
-    const jobs = ['kod yazarak', 'madende çalışarak', 'kargo dağıtarak', 'grafik tasarlayarak', 'sunucu yöneterek'];
-    const job = jobs[Math.floor(Math.random() * jobs.length)];
-
-    data.wallet += reward;
-    data.stats.calismaSayisi += 1;
-    data.stats.toplamKazanilan += reward;
-    setCooldown(data, 'work');
-    const leveledUp = await addXP(data, 10);
-
-    await ref.set(data);
-    let msg = `Bugün ${job} ${formatMoney(reward)} kazandın.`;
-    if (leveledUp) msg += `\n🎉 **Tebrikler, seviye atladın! Yeni Seviye: ${data.level}**`;
-    
-    await interaction.editReply({ embeds: [UI.Success(msg, interaction.user)] });
-}
-
-async function handleYatir(interaction, data, ref) {
-    const miktarStr = interaction.options.getString('miktar').toLowerCase();
-    let amount = 0;
-
-    if (miktarStr === 'hepsi' || miktarStr === 'all') amount = data.wallet;
-    else amount = parseInt(miktarStr);
-
-    if (isNaN(amount) || amount <= 0) return interaction.editReply({ embeds: [UI.Error('Lütfen geçerli bir miktar girin veya "hepsi" yazın.', interaction.user)] });
-    if (data.wallet < amount) return interaction.editReply({ embeds: [UI.Error('Cüzdanında bu kadar para yok!', interaction.user)] });
-    
-    const availableSpace = data.bankMax - data.bank;
-    if (availableSpace <= 0) return interaction.editReply({ embeds: [UI.Error('Bankan tamamen dolu!', interaction.user)] });
-    
-    if (amount > availableSpace) amount = availableSpace;
-
-    data.wallet -= amount;
-    data.bank += amount;
-    
-    await ref.set(data);
-    await interaction.editReply({ embeds: [UI.Success(`Bankaya başarıyla ${formatMoney(amount)} yatırıldı.\nYeni Banka Bakiyesi: ${formatMoney(data.bank)}`, interaction.user)] });
-}
-
-async function handleCek(interaction, data, ref) {
-    const miktarStr = interaction.options.getString('miktar').toLowerCase();
-    let amount = 0;
-
-    if (miktarStr === 'hepsi' || miktarStr === 'all') amount = data.bank;
-    else amount = parseInt(miktarStr);
-
-    if (isNaN(amount) || amount <= 0) return interaction.editReply({ embeds: [UI.Error('Lütfen geçerli bir miktar girin veya "hepsi" yazın.', interaction.user)] });
-    if (data.bank < amount) return interaction.editReply({ embeds: [UI.Error('Bankanda bu kadar para yok!', interaction.user)] });
-
-    data.bank -= amount;
-    data.wallet += amount;
-    
-    await ref.set(data);
-    await interaction.editReply({ embeds: [UI.Success(`Bankadan başarıyla ${formatMoney(amount)} çekildi.\nYeni Cüzdan Bakiyesi: ${formatMoney(data.wallet)}`, interaction.user)] });
-}
-
-async function handleGonder(interaction, data, ref) {
-    const targetUser = interaction.options.getUser('hedef');
-    const amount = interaction.options.getInteger('miktar');
-
-    if (targetUser.bot) return interaction.editReply({ embeds: [UI.Error('Botlara para gönderemezsin!', interaction.user)] });
-    if (targetUser.id === interaction.user.id) return interaction.editReply({ embeds: [UI.Error('Kendine para gönderemezsin!', interaction.user)] });
-    if (amount <= 0) return interaction.editReply({ embeds: [UI.Error('Geçerli bir miktar girmelisin.', interaction.user)] });
-    if (data.wallet < amount) return interaction.editReply({ embeds: [UI.Error('Cüzdanında yeterli bakiye yok.', interaction.user)] });
-
-    const { ref: targetRef, data: targetData } = await getUserData(targetUser.id);
-
-    data.wallet -= amount;
-    targetData.wallet += amount;
-
-    await ref.set(data);
-    await targetRef.set(targetData);
-
-    await interaction.editReply({ embeds: [UI.Success(`${targetUser} adlı kullanıcıya başarıyla ${formatMoney(amount)} gönderildi.`, interaction.user)] });
-}
-
-async function handleMarket(interaction) {
-    let desc = "Aşağıdaki ürünleri `/mc satınal <id>` komutu ile alabilirsiniz.\n\n";
-    SHOP_ITEMS.forEach(item => {
-        desc += `**📦 ${item.name}** (\`${item.id}\`)\n`;
-        desc += `└ 🏷️ **Fiyat:** ${formatMoney(item.price)} | 🗂️ **Kategori:** ${item.category}\n`;
-        desc += `└ 📝 *${item.desc}*\n\n`;
-    });
-
-    await interaction.editReply({ embeds: [UI.Info('🛒 MetaCoin Market', desc, interaction.user)] });
-}
-
-async function handleSatinal(interaction, data, ref) {
-    const itemId = interaction.options.getString('urun_id').toLowerCase();
-    const item = SHOP_ITEMS.find(i => i.id === itemId);
-
-    if (!item) return interaction.editReply({ embeds: [UI.Error('Böyle bir ürün bulunamadı. Lütfen marketi kontrol edin.', interaction.user)] });
-    if (data.wallet < item.price) return interaction.editReply({ embeds: [UI.Error(`Bu ürünü almak için cüzdanında yeterli para yok. Gerekli: ${formatMoney(item.price)}`, interaction.user)] });
-
-    data.wallet -= item.price;
-    data.stats.marketAlimSayisi += 1;
-
-    // Özel ürün mantıkları
-    if (item.id === 'banka_belgesi') {
-        data.bankMax += 25000;
-        await ref.set(data);
-        return interaction.editReply({ embeds: [UI.Success(`Banka Genişletme Belgesi satın alındı! Yeni banka limitin: ${formatMoney(data.bankMax)}`, interaction.user)] });
-    }
-    
-    if (item.id === 'xp_karti') {
-        await addXP(data, 500);
-        await ref.set(data);
-        return interaction.editReply({ embeds: [UI.Success(`Premium XP Kartı kullanıldı! Hesabına 500 XP eklendi.`, interaction.user)] });
+    const botVoice = interaction.guild.members.me.voice.channel;
+    if (requireBotInVoice && !botVoice) {
+        interaction.reply({ embeds: [UI.Error('Bot şu an herhangi bir ses kanalında değil.')], ephemeral: true });
+        return false;
     }
 
-    // Normal Envanter Kaydı
-    if (!data.inventory[item.id]) data.inventory[item.id] = 0;
-    data.inventory[item.id] += 1;
-
-    await ref.set(data);
-    await interaction.editReply({ embeds: [UI.Success(`Başarıyla **${item.name}** satın aldın!`, interaction.user)] });
-}
-
-async function handleProfil(interaction, data) {
-    const targetUser = interaction.options.getUser('kullanici') || interaction.user;
-    let userData = data;
-    
-    if (targetUser.id !== interaction.user.id) {
-        const { data: targetData } = await getUserData(targetUser.id);
-        userData = targetData;
+    if (botVoice && userVoice.id !== botVoice.id) {
+        interaction.reply({ embeds: [UI.Error(`Bot zaten **${botVoice.name}** kanalında. Aynı kanalda olmalısınız.`)], ephemeral: true });
+        return false;
     }
 
-    const embed = new EmbedBuilder()
-        .setTitle(`👤 ${targetUser.username} - Oyuncu Profili`)
-        .setColor(CONFIG.UI.COLORS.PRIMARY)
-        .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 256 }))
-        .addFields(
-            { name: '📊 Seviye & XP', value: `**Seviye:** ${userData.level}\n**XP:** ${userData.xp} / ${getLevelTarget(userData.level)}`, inline: true },
-            { name: '💰 Bakiye', value: `**Cüzdan:** ${userData.wallet.toLocaleString()}\n**Banka:** ${userData.bank.toLocaleString()}/${userData.bankMax.toLocaleString()}`, inline: true },
-            { name: '📈 İstatistikler', value: `**Çalışma:** ${userData.stats.calismaSayisi}\n**Günlük:** ${userData.stats.gunlukKullanim}\n**Market:** ${userData.stats.marketAlimSayisi}`, inline: false }
-        )
-        .setFooter({ text: 'MetaCoin Sistemleri' });
-
-    await interaction.editReply({ embeds: [embed] });
+    return true;
 }
 
-async function handleSiralama(interaction) {
-    const snapshot = await db.collection('users').get();
-    const users = [];
+// ============================================================================
+// 6. SES KAYNAĞI VE MÜZİK YÖNETİM SİSTEMİ
+// ============================================================================
 
-    snapshot.forEach(doc => {
-        const data = doc.data();
-        const total = (data.wallet || 0) + (data.bank || 0);
-        users.push({ id: doc.id, total, level: data.level || 1 });
-    });
+async function playNext(guildId) {
+    const serverQueue = queueMap.get(guildId);
+    if (!serverQueue) return;
 
-    users.sort((a, b) => b.total - a.total);
-    const top10 = users.slice(0, 10);
-
-    let desc = "**🏆 En Zengin 10 Kullanıcı**\n\n";
-    for (let i = 0; i < top10.length; i++) {
-        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🎗️';
-        desc += `${medal} **${i + 1}.** <@${top10[i].id}> - **${top10[i].total.toLocaleString()} ${CONFIG.ECONOMY.SYMBOL}** *(Seviye ${top10[i].level})*\n`;
+    // Döngü mantığı
+    if (serverQueue.currentSong) {
+        if (serverQueue.loopMode === 'SARKI') {
+            serverQueue.songs.unshift(serverQueue.currentSong);
+        } else if (serverQueue.loopMode === 'KUYRUK') {
+            serverQueue.songs.push(serverQueue.currentSong);
+        }
     }
 
-    await interaction.editReply({ embeds: [UI.Info('👑 MetaCoin Sıralama', desc, interaction.user)] });
+    if (serverQueue.songs.length === 0) {
+        // Kuyruk bitti
+        serverQueue.currentSong = null;
+        if (serverQueue.textChannel) {
+            serverQueue.textChannel.send({ embeds: [UI.Info('Kuyruk sona erdi. Bot kanalda bekliyor.')] }).catch(() => {});
+        }
+        return;
+    }
+
+    const nextSong = serverQueue.songs.shift();
+    serverQueue.currentSong = nextSong;
+
+    try {
+        const stream = await play.stream(nextSong.url);
+        const resource = createAudioResource(stream.stream, {
+            inputType: stream.type,
+            inlineVolume: true
+        });
+        
+        resource.volume.setVolume(serverQueue.volume / 100);
+        serverQueue.player.play(resource);
+
+        if (serverQueue.textChannel) {
+            serverQueue.textChannel.send({ embeds: [UI.NowPlaying(nextSong)] }).catch(() => {});
+        }
+    } catch (error) {
+        console.error(`[Oynatma Hatası - ${guildId}]:`, error);
+        if (serverQueue.textChannel) {
+            serverQueue.textChannel.send({ embeds: [UI.Error(`Şarkı oynatılamadı, sıradakine geçiliyor. (${nextSong.title})`)] }).catch(() => {});
+        }
+        playNext(guildId);
+    }
 }
 
-async function handleYardim(interaction) {
-    const embed = new EmbedBuilder()
-        .setTitle('📚 MetaCoin Yardım Menüsü')
-        .setColor(CONFIG.UI.COLORS.PRIMARY)
-        .setDescription('Tüm bot sistemini `/mc` komutu üzerinden yönetebilirsiniz.')
-        .addFields(
-            { name: '💸 Gelir Komutları', value: '`/mc günlük` - Günlük ödül\n`/mc çalış` - Düzenli maaş\n`/mc suç` - Riskli işler (Geliştiriliyor)' },
-            { name: '🏦 Banka ve Transfer', value: '`/mc bakiye` - Hesabını gör\n`/mc yatır <miktar/hepsi>` - Bankaya koy\n`/mc çek <miktar/hepsi>` - Cüzdana al\n`/mc gönder <kullanıcı> <miktar>` - Para yolla' },
-            { name: '🛒 Market ve Ekonomi', value: '`/mc market` - Ürünleri listele\n`/mc satınal <id>` - Ürün al\n`/mc envanter` - Eşyalarını gör' },
-            { name: '📊 Bilgi', value: '`/mc profil` - İstatistiklerin\n`/mc sıralama` - Zenginler listesi' }
-        )
-        .setFooter({ text: `İstek: ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() });
-
-    await interaction.editReply({ embeds: [embed] });
-}
-
-/**
- * ============================================================================
- * 11. SLASH COMMAND TANIMLAMASI
- * ============================================================================
- */
-const mcCommand = new SlashCommandBuilder()
-    .setName('mc')
-    .setDescription('MetaCoin ekonomi sisteminin ana komutu.')
+// ============================================================================
+// 7. SLASH COMMAND TANIMLAMALARI
+// ============================================================================
+const musicCommand = new SlashCommandBuilder()
+    .setName('muzik')
+    .setDescription('Gelişmiş müzik botu ana komutu.')
     
-    // Bakiye
-    .addSubcommand(sub => sub.setName('bakiye').setDescription('Mevcut paranızı ve banka durumunuzu gösterir.')
-        .addUserOption(opt => opt.setName('kullanici').setDescription('Bakiyesini görmek istediğiniz kullanıcı (Opsiyonel)')))
-    // Günlük
-    .addSubcommand(sub => sub.setName('gunluk').setDescription('Günlük ücretsiz MetaCoin ödülünüzü alırsınız.'))
-    // Çalış
-    .addSubcommand(sub => sub.setName('calis').setDescription('Çalışarak para kazanırsınız.'))
-    // Yatır
-    .addSubcommand(sub => sub.setName('yatir').setDescription('Cüzdanınızdaki parayı bankaya yatırırsınız.')
-        .addStringOption(opt => opt.setName('miktar').setDescription('Yatırılacak miktar veya "hepsi"').setRequired(true)))
-    // Çek
-    .addSubcommand(sub => sub.setName('cek').setDescription('Bankanızdaki parayı cüzdanınıza çekersiniz.')
-        .addStringOption(opt => opt.setName('miktar').setDescription('Çekilecek miktar veya "hepsi"').setRequired(true)))
-    // Gönder
-    .addSubcommand(sub => sub.setName('gonder').setDescription('Başka bir kullanıcıya para gönderirsiniz.')
-        .addUserOption(opt => opt.setName('hedef').setDescription('Para gönderilecek kullanıcı').setRequired(true))
-        .addIntegerOption(opt => opt.setName('miktar').setDescription('Gönderilecek miktar').setRequired(true)))
-    // Market
-    .addSubcommand(sub => sub.setName('market').setDescription('Market ürünlerini listeler.'))
-    // Satın Al
-    .addSubcommand(sub => sub.setName('satinal').setDescription('Marketten bir ürün satın alırsınız.')
-        .addStringOption(opt => opt.setName('urun_id').setDescription('Satın alınacak ürünün ID\'si').setRequired(true)))
-    // Profil
-    .addSubcommand(sub => sub.setName('profil').setDescription('Sizin veya bir başkasının seviye ve detaylı istatistiklerini gösterir.')
-        .addUserOption(opt => opt.setName('kullanici').setDescription('Profiline bakılacak kullanıcı (Opsiyonel)')))
-    // Sıralama
-    .addSubcommand(sub => sub.setName('siralama').setDescription('Sunucudaki veya globaldeki en zengin kullanıcıları listeler.'))
-    // Yardım
-    .addSubcommand(sub => sub.setName('yardim').setDescription('Ekonomi botunun tüm komutlarını ve kullanımını gösterir.'));
+    // Alt Komutlar
+    .addSubcommand(sub => sub.setName('gir').setDescription('Botu bulunduğunuz ses kanalına sokar.'))
+    .addSubcommand(sub => sub.setName('cal').setDescription('Belirttiğiniz şarkıyı çalar veya kuyruğa ekler.')
+        .addStringOption(opt => opt.setName('sorgu').setDescription('Şarkı adı veya URL (YouTube vs.)').setRequired(true)))
+    .addSubcommand(sub => sub.setName('gec').setDescription('Mevcut şarkıyı geçer.'))
+    .addSubcommand(sub => sub.setName('durdur').setDescription('Çalmayı durdurur ve kuyruğu temizler.'))
+    .addSubcommand(sub => sub.setName('duraklat').setDescription('Mevcut şarkıyı duraklatır.'))
+    .addSubcommand(sub => sub.setName('devam').setDescription('Duraklatılmış şarkıyı devam ettirir.'))
+    .addSubcommand(sub => sub.setName('sira').setDescription('Müzik kuyruğunu gösterir.'))
+    .addSubcommand(sub => sub.setName('calan').setDescription('Şu an çalan şarkı bilgisini gösterir.'))
+    .addSubcommand(sub => sub.setName('ses').setDescription('Ses seviyesini ayarlar.')
+        .addIntegerOption(opt => opt.setName('seviye').setDescription('Ses seviyesi (1-150)').setMinValue(1).setMaxValue(150).setRequired(true)))
+    .addSubcommand(sub => sub.setName('dongu').setDescription('Döngü modunu değiştirir.')
+        .addStringOption(opt => opt.setName('mod').setDescription('Döngü Modu').setRequired(true)
+            .addChoices(
+                { name: 'Kapalı', value: 'KAPALI' },
+                { name: 'Şarkı (Tekrarla)', value: 'SARKI' },
+                { name: 'Kuyruk (Tümünü Tekrarla)', value: 'KUYRUK' }
+            )))
+    .addSubcommand(sub => sub.setName('cik').setDescription('Bot ses kanalından çıkar ve verileri temizler.'))
+    .addSubcommand(sub => sub.setName('yardim').setDescription('Müzik botu komutları hakkında bilgi verir.'));
 
-/**
- * ============================================================================
- * 12. DISCORD EVENTLERİ VE BOT BAŞLATMA
- * ============================================================================
- */
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+// ============================================================================
+// 8. DISCORD İSTEMCİSİ VE EVENT HANDLER
+// ============================================================================
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessages
+    ]
+});
 
 client.once('ready', async () => {
-    console.log(`[BOT] ${client.user.tag} olarak giriş yapıldı!`);
+    console.log(`[DISCORD] ${client.user.tag} olarak giriş yapıldı!`);
+    client.user.setActivity('/muzik yardim | Premium Kalite', { type: 2 }); // Listening
 
-    if (CONFIG.DISCORD.REGISTER) {
+    // Komutları Kaydet (Slash Command Register)
+    if (CONFIG.REGISTER_COMMANDS) {
+        const rest = new REST({ version: '10' }).setToken(CONFIG.TOKEN);
         try {
-            const rest = new REST({ version: '10' }).setToken(CONFIG.DISCORD.TOKEN);
-            console.log('[BOT] Slash komutları kaydediliyor...');
+            console.log('[DISCORD] Slash komutları yükleniyor...');
+            const route = CONFIG.GUILD_ID 
+                ? Routes.applicationGuildCommands(CONFIG.CLIENT_ID, CONFIG.GUILD_ID)
+                : Routes.applicationCommands(CONFIG.CLIENT_ID);
             
-            // Komutları sadece belirtilen sunucuya kaydet (Anında test için önerilir)
-            if (CONFIG.DISCORD.GUILD_ID) {
-                await rest.put(Routes.applicationGuildCommands(CONFIG.DISCORD.CLIENT_ID, CONFIG.DISCORD.GUILD_ID), { body: [mcCommand.toJSON()] });
-                console.log('[BOT] Komutlar sunucuya kaydedildi.');
-            } else {
-                await rest.put(Routes.applicationCommands(CONFIG.DISCORD.CLIENT_ID), { body: [mcCommand.toJSON()] });
-                console.log('[BOT] Komutlar globale kaydedildi.');
-            }
+            await rest.put(route, { body: [musicCommand.toJSON()] });
+            console.log('[DISCORD] Slash komutları başarıyla kaydedildi.');
         } catch (error) {
-            console.error('[BOT] Komut kayıt hatası:', error);
+            console.error('[DISCORD] Komut kayıt hatası:', error);
         }
     }
 });
 
+// ============================================================================
+// 9. SLASH COMMAND İŞLEYİCİSİ (INTERACTION CREATE)
+// ============================================================================
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName !== 'mc') return;
+    if (interaction.commandName !== 'muzik') return;
 
-    // Timeout olmaması için hızlıca defer ediyoruz
-    await interaction.deferReply();
+    const subCommand = interaction.options.getSubcommand();
+    const guildId = interaction.guild.id;
 
     try {
-        const { ref, data } = await getUserData(interaction.user.id);
+        switch (subCommand) {
+            // -------------------------------------------------------------
+            case 'gir': {
+                if (!checkVoiceRequirements(interaction, false)) return;
+                
+                const voiceChannel = interaction.member.voice.channel;
+                const connection = joinVoiceChannel({
+                    channelId: voiceChannel.id,
+                    guildId: guildId,
+                    adapterCreator: interaction.guild.voiceAdapterCreator,
+                });
 
-        if (data.flags.blacklisted) {
-            return interaction.editReply({ embeds: [UI.Error('Kara listeye alınmışsınız. Ekonomi komutlarını kullanamazsınız.', interaction.user)] });
-        }
+                await interaction.reply({ embeds: [UI.Success(`Bağlanıldı: **${voiceChannel.name}**`)] });
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'cal': {
+                if (!checkVoiceRequirements(interaction, false)) return;
+                await interaction.deferReply(); // İşlem uzun sürebilir
 
-        const sub = interaction.options.getSubcommand();
+                const query = interaction.options.getString('sorgu');
+                const voiceChannel = interaction.member.voice.channel;
+                
+                // Araştırma / Parse İşlemi
+                let videoInfo;
+                try {
+                    const searchResult = await play.search(query, { limit: 1 });
+                    if (!searchResult || searchResult.length === 0) {
+                        return interaction.editReply({ embeds: [UI.Error('Şarkı bulunamadı.')] });
+                    }
+                    videoInfo = searchResult[0];
+                } catch (err) {
+                    return interaction.editReply({ embeds: [UI.Error('Arama sırasında bir hata oluştu. Lütfen geçerli bir bağlantı veya isim girin.')] });
+                }
 
-        switch (sub) {
-            case 'bakiye': await handleBakiye(interaction, data); break;
-            case 'gunluk': await handleGunluk(interaction, data, ref); break;
-            case 'calis': await handleCalis(interaction, data, ref); break;
-            case 'yatir': await handleYatir(interaction, data, ref); break;
-            case 'cek': await handleCek(interaction, data, ref); break;
-            case 'gonder': await handleGonder(interaction, data, ref); break;
-            case 'market': await handleMarket(interaction); break;
-            case 'satinal': await handleSatinal(interaction, data, ref); break;
-            case 'profil': await handleProfil(interaction, data); break;
-            case 'siralama': await handleSiralama(interaction); break;
-            case 'yardim': await handleYardim(interaction); break;
-            default:
-                await interaction.editReply({ embeds: [UI.Info('Bilgi', 'Bu komut yapım aşamasındadır.', interaction.user)] });
+                const song = {
+                    title: videoInfo.title,
+                    url: videoInfo.url,
+                    duration: videoInfo.durationRaw,
+                    thumbnail: videoInfo.thumbnails[0]?.url || null,
+                    requester: interaction.user
+                };
+
+                let serverQueue = queueMap.get(guildId);
+
+                // Kuyruk yoksa oluştur
+                if (!serverQueue) {
+                    const player = createAudioPlayer();
+                    const connection = joinVoiceChannel({
+                        channelId: voiceChannel.id,
+                        guildId: guildId,
+                        adapterCreator: interaction.guild.voiceAdapterCreator,
+                    });
+
+                    serverQueue = {
+                        textChannel: interaction.channel,
+                        voiceChannel: voiceChannel,
+                        connection: connection,
+                        player: player,
+                        songs: [],
+                        volume: CONFIG.DEFAULT_VOLUME,
+                        playing: true,
+                        loopMode: 'KAPALI',
+                        currentSong: null
+                    };
+                    queueMap.set(guildId, serverQueue);
+
+                    // Oynatıcı eventlerini dinle
+                    player.on(AudioPlayerStatus.Idle, () => {
+                        playNext(guildId);
+                    });
+                    
+                    player.on('error', error => {
+                        console.error(`[Ses Oynatıcı Hatası - ${guildId}]:`, error.message);
+                        playNext(guildId);
+                    });
+
+                    connection.subscribe(player);
+                }
+
+                // Şarkıyı kuyruğa ekle
+                if (serverQueue.songs.length >= CONFIG.MAX_QUEUE_SIZE) {
+                    return interaction.editReply({ embeds: [UI.Error(`Kuyruk kapasitesi doldu! (Maksimum ${CONFIG.MAX_QUEUE_SIZE} şarkı)`)] });
+                }
+
+                serverQueue.songs.push(song);
+
+                if (!serverQueue.currentSong) {
+                    // İlk şarkıysa direkt başlat
+                    interaction.editReply({ embeds: [UI.Success(`Şarkı yükleniyor ve çalmaya başlıyor...`)] });
+                    playNext(guildId);
+                } else {
+                    // Oynatılıyorsa sıraya eklendi bilgisini ver
+                    const addedEmbed = new EmbedBuilder()
+                        .setColor(CONFIG.COLORS.INFO)
+                        .setAuthor({ name: '📝 Kuyruğa Eklendi' })
+                        .setTitle(song.title)
+                        .setURL(song.url)
+                        .addFields(
+                            { name: 'Süre', value: song.duration, inline: true },
+                            { name: 'Sıra', value: `#${serverQueue.songs.length}`, inline: true }
+                        )
+                        .setThumbnail(song.thumbnail);
+                    interaction.editReply({ embeds: [addedEmbed] });
+                }
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'gec': {
+                if (!checkVoiceRequirements(interaction, true)) return;
+                const serverQueue = queueMap.get(guildId);
+                
+                if (!serverQueue || !serverQueue.currentSong) {
+                    return interaction.reply({ embeds: [UI.Error('Şu anda çalan bir şarkı yok.')], ephemeral: true });
+                }
+
+                serverQueue.player.stop(); // Stop tetiklenince Idle eventi çalışır ve playNext()'i çağırır.
+                interaction.reply({ embeds: [UI.Success('Şarkı geçildi. ⏭️')] });
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'durdur': {
+                if (!checkVoiceRequirements(interaction, true)) return;
+                const serverQueue = queueMap.get(guildId);
+                
+                if (!serverQueue) {
+                    return interaction.reply({ embeds: [UI.Error('Durdurulacak bir müzik sistemi aktif değil.')], ephemeral: true });
+                }
+
+                serverQueue.songs = [];
+                serverQueue.loopMode = 'KAPALI';
+                serverQueue.player.stop();
+                interaction.reply({ embeds: [UI.Success('Müzik durduruldu ve kuyruk temizlendi. ⏹️')] });
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'duraklat': {
+                if (!checkVoiceRequirements(interaction, true)) return;
+                const serverQueue = queueMap.get(guildId);
+                
+                if (!serverQueue || !serverQueue.currentSong) return interaction.reply({ embeds: [UI.Error('Çalan bir şarkı yok.')] });
+                if (serverQueue.player.state.status === AudioPlayerStatus.Paused) return interaction.reply({ embeds: [UI.Info('Şarkı zaten duraklatılmış.')] });
+
+                serverQueue.player.pause();
+                interaction.reply({ embeds: [UI.Success('Şarkı duraklatıldı. ⏸️')] });
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'devam': {
+                if (!checkVoiceRequirements(interaction, true)) return;
+                const serverQueue = queueMap.get(guildId);
+                
+                if (!serverQueue || !serverQueue.currentSong) return interaction.reply({ embeds: [UI.Error('Çalan bir şarkı yok.')] });
+                if (serverQueue.player.state.status !== AudioPlayerStatus.Paused) return interaction.reply({ embeds: [UI.Info('Şarkı şu an duraklatılmış durumda değil.')] });
+
+                serverQueue.player.unpause();
+                interaction.reply({ embeds: [UI.Success('Şarkı devam ettiriliyor. ▶️')] });
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'sira': {
+                const serverQueue = queueMap.get(guildId);
+                if (!serverQueue) {
+                    return interaction.reply({ embeds: [UI.Info('Sunucuda aktif bir kuyruk bulunmuyor.')] });
+                }
+                interaction.reply({ embeds: [UI.QueueList(serverQueue)] });
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'calan': {
+                const serverQueue = queueMap.get(guildId);
+                if (!serverQueue || !serverQueue.currentSong) {
+                    return interaction.reply({ embeds: [UI.Info('Şu anda çalan bir şarkı yok.')] });
+                }
+                interaction.reply({ embeds: [UI.NowPlaying(serverQueue.currentSong)] });
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'ses': {
+                if (!checkVoiceRequirements(interaction, true)) return;
+                const serverQueue = queueMap.get(guildId);
+                if (!serverQueue) return interaction.reply({ embeds: [UI.Error('Aktif bir müzik sistemi yok.')], ephemeral: true });
+
+                const volume = interaction.options.getInteger('seviye');
+                serverQueue.volume = volume;
+                
+                // Mevcut resource varsa sesini güncelle
+                if (serverQueue.player.state.status === AudioPlayerStatus.Playing) {
+                    serverQueue.player.state.resource.volume.setVolume(volume / 100);
+                }
+
+                interaction.reply({ embeds: [UI.Success(`Ses seviyesi **%${volume}** olarak ayarlandı. 🔊`)] });
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'dongu': {
+                if (!checkVoiceRequirements(interaction, true)) return;
+                const serverQueue = queueMap.get(guildId);
+                if (!serverQueue) return interaction.reply({ embeds: [UI.Error('Aktif bir müzik sistemi yok.')], ephemeral: true });
+
+                const mode = interaction.options.getString('mod');
+                serverQueue.loopMode = mode;
+
+                let modeStr = mode === 'KAPALI' ? 'Kapalı ➡️' : mode === 'SARKI' ? 'Şarkı Döngüsü 🔂' : 'Kuyruk Döngüsü 🔁';
+                interaction.reply({ embeds: [UI.Success(`Döngü modu ayarlandı: **${modeStr}**`)] });
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'cik': {
+                if (!checkVoiceRequirements(interaction, true)) return;
+                const serverQueue = queueMap.get(guildId);
+                
+                if (serverQueue) {
+                    serverQueue.player.stop();
+                    serverQueue.connection.destroy();
+                    queueMap.delete(guildId);
+                } else {
+                    // Sadece kanaldan atılmış kalmış botu temizlemek için
+                    const connection = getVoiceConnection(guildId);
+                    if (connection) connection.destroy();
+                }
+
+                interaction.reply({ embeds: [UI.Success('Ses kanalından çıkıldı ve veriler temizlendi. 👋')] });
+                break;
+            }
+            // -------------------------------------------------------------
+            case 'yardim': {
+                const helpEmbed = new EmbedBuilder()
+                    .setColor(CONFIG.COLORS.PREMIUM)
+                    .setTitle('🎛️ Müzik Sistemi Yardım Menüsü')
+                    .setDescription('Gelişmiş komut yapısı `/muzik <işlem>` şeklindedir.')
+                    .addFields(
+                        { name: '🎵 Oynatma İşlemleri', value: 
+                            `\`/muzik cal [sorgu]\` - Şarkı arar veya URL'den oynatır.\n` +
+                            `\`/muzik gec\` - Çalan şarkıyı atlar.\n` +
+                            `\`/muzik durdur\` - Sistemi durdurur, kuyruğu temizler.`
+                        },
+                        { name: '⏸️ Kontrol İşlemleri', value: 
+                            `\`/muzik duraklat\` - Şarkıyı duraklatır.\n` +
+                            `\`/muzik devam\` - Şarkıyı sürdürür.\n` +
+                            `\`/muzik ses [seviye]\` - Sesi ayarlar (1-150).\n` +
+                            `\`/muzik dongu [mod]\` - Tekrar modunu ayarlar.`
+                        },
+                        { name: '📋 Bilgi ve Yönetim', value: 
+                            `\`/muzik sira\` - Tüm şarkı kuyruğunu görüntüler.\n` +
+                            `\`/muzik calan\` - O anki şarkı detaylarını verir.\n` +
+                            `\`/muzik gir\` - Kanala giriş yapar.\n` +
+                            `\`/muzik cik\` - Çıkış yapar ve sistemi temizler.`
+                        }
+                    )
+                    .setFooter({ text: 'Tek Dosya • Premium Müzik Botu' });
+
+                interaction.reply({ embeds: [helpEmbed] });
+                break;
+            }
         }
     } catch (error) {
-        console.error('[ERROR] Komut işlenirken hata oluştu:', error);
-        await interaction.editReply({ embeds: [UI.Error('İşlem sırasında beklenmedik bir veritabanı veya sistem hatası oluştu. Lütfen daha sonra tekrar deneyin.', interaction.user)] }).catch(() => {});
+        console.error(`[Komut Hatası - ${subCommand}]:`, error);
+        const errEmbed = UI.Error('Bu komut işlenirken beklenmeyen bir sistem hatası oluştu.');
+        if (interaction.deferred || interaction.replied) {
+            interaction.editReply({ embeds: [errEmbed], ephemeral: true }).catch(() => {});
+        } else {
+            interaction.reply({ embeds: [errEmbed], ephemeral: true }).catch(() => {});
+        }
     }
 });
 
-client.login(CONFIG.DISCORD.TOKEN);
+// Bot Bağlantısı
+client.login(CONFIG.TOKEN);
