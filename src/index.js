@@ -1,10 +1,10 @@
 /**
  * ============================================================================
- * MetaCoin REBORN v1.1.0 (GOD TIER UPGRADE)
- * Next-Gen Advanced Discord Economy Bot
+ * MetaCoin REBORN v2.0.0 (GOD TIER UPGRADE)
+ * Next-Gen Advanced Discord Economy & Casino Bot
  * * Mimarisi: 30 Bölümlük Organize Tek Dosya (Single-File Architecture)
- * * Özellikler: Lazy Faiz Sistemi, Dinamik Kredi/Ceza, Hibrit Ödeme, Gelişmiş Admin
- * * Güvenlik: Smart Defer, Atomic Locks, s.string() Validasyon Çözümü, 40060 Bypass
+ * * Özellikler: Lazy Faiz Sistemi, Hibrit Ödeme, Gelişmiş Admin, Dev Casino
+ * * Güvenlik: Smart Defer, Atomic Locks, Tam Validasyon, Veri Kaybı Koruması
  * ============================================================================
  */
 
@@ -38,7 +38,7 @@ const {
     INTEREST_RATE_LOAN = "0.05", LOAN_LATE_PENALTY_RATE = "0.10", LOAN_MAX_ACTIVE_COUNT = "3",
     INVESTMENT_BREAK_PENALTY_RATE = "0.15",
     TAX_ENABLED = "true", TAX_RATE_TRANSFER = "0.02", TAX_RATE_WITHDRAW = "0.01", TAX_RATE_GAMBLING_WIN = "0.03",
-    MAX_BET_AMOUNT = "100000", MAX_SLOTS_AMOUNT = "50000", MAX_COINFLIP_AMOUNT = "100000", MAX_TRANSFER_AMOUNT = "1000000",
+    MAX_BET_AMOUNT = "250000", MAX_SLOTS_AMOUNT = "100000", MAX_TRANSFER_AMOUNT = "1000000",
     MAX_CRATE_OPEN_BATCH = "50", MAX_SELL_BATCH = "100", MAX_BUY_BATCH = "50",
     MAX_INVENTMENT_DAYS = "30", MAX_TRANSACTION_HISTORY = "50",
     ECONOMY_CURRENCY_NAME = "MetaCoin", ECONOMY_CURRENCY_SYMBOL = "MC",
@@ -52,13 +52,14 @@ if (!DISCORD_TOKEN || !CLIENT_ID) {
 }
 const ADMIN_LIST = OWNER_IDS.split(",").map(id => id.trim()).filter(Boolean);
 const IS_DEBUG = DEBUG === "true";
-const VERSION = "1.1.0 - REBORN";
+const VERSION = "2.0.0 - GOD TIER";
 
 // ============================================================================
 // 3. CONSTANTS
 // ============================================================================
 const THEME = {
-    main: 0x00c2ff, success: 0x2ecc71, error: 0xe74c3c, gamble: 0x9b59b6, admin: 0xe67e22, shop: 0xf1c40f, finance: 0x34495e, audit: 0x7f8c8d
+    main: 0x00c2ff, success: 0x2ecc71, error: 0xe74c3c, gamble: 0x9b59b6, 
+    admin: 0xe67e22, shop: 0xf1c40f, finance: 0x34495e, audit: 0x7f8c8d, jackpot: 0xffd700
 };
 
 const COOLDOWNS = {
@@ -165,11 +166,12 @@ const createUserTemplate = (userId) => ({
     last_interest_calc: nowSec(),
     daily_streak: 0, last_daily: 0,
     total_interest_earned: 0, total_loan_interest_paid: 0, total_taxes_paid: 0, credit_score: 500,
+    free_spins: 0, bet_streak: 0, bet_streak_type: "none",
     stats: {
         total_earned: 0, total_lost: 0, total_transferred_in: 0, total_transferred_out: 0,
         crates_opened: 0, items_sold: 0, work_uses: 0, beg_uses: 0,
         crime_success: 0, crime_fails: 0, rob_success: 0, rob_fails: 0,
-        slots_plays: 0, coinflip_plays: 0, largest_win: 0, largest_loss: 0,
+        slots_plays: 0, bet_plays: 0, largest_win: 0, largest_loss: 0,
         loans_taken: 0, loans_repaid: 0, investments_created: 0, investments_claimed: 0
     }
 });
@@ -186,7 +188,6 @@ function normalizeSchema(user) {
         }
     };
     healObj(user, tpl);
-    // Negative balance strict prevention
     if (user.wallet < 0) user.wallet = 0;
     if (user.bank < 0) user.bank = 0;
     return user;
@@ -220,11 +221,10 @@ class StorageManager {
     async saveDocument(id, col, docId, doc) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, col, docId, doc) : JsonImpl.saveDocument(id, col, docId, doc); }
     async deleteDocument(id, col, docId) { return this.provider === "firestore" ? FirestoreImpl.deleteDocument(id, col, docId) : JsonImpl.deleteDocument(id, col, docId); }
 
-    // Core Sub-Collection Bridges
-    async getLoans(id) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, "loans") : JsonImpl.getCollection(id, "loans"); }
-    async saveLoan(id, loan) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, "loans", loan.id, loan) : JsonImpl.saveDocument(id, "loans", loan.id, loan); }
-    async getInvestments(id) { return this.provider === "firestore" ? FirestoreImpl.getCollection(id, "investments") : JsonImpl.getCollection(id, "investments"); }
-    async saveInvestment(id, inv) { return this.provider === "firestore" ? FirestoreImpl.saveDocument(id, "investments", inv.id, inv) : JsonImpl.saveDocument(id, "investments", inv.id, inv); }
+    async getLoans(id) { return this.getCollection(id, "loans"); }
+    async saveLoan(id, loan) { return this.saveDocument(id, "loans", loan.id, loan); }
+    async getInvestments(id) { return this.getCollection(id, "investments"); }
+    async saveInvestment(id, inv) { return this.saveDocument(id, "investments", inv.id, inv); }
 
     async addTransaction(id, tx) { 
         tx.id = generateId(); tx.timestamp = nowSec(); 
@@ -234,7 +234,11 @@ class StorageManager {
     async setCooldown(id, cmd, ms) { return this.provider === "firestore" ? FirestoreImpl.setCooldown(id, cmd, ms) : JsonImpl.setCooldown(id, cmd, ms); }
     async resetCooldown(id, cmd) { return this.provider === "firestore" ? FirestoreImpl.resetCooldown(id, cmd) : JsonImpl.resetCooldown(id, cmd); }
 
-    async getGlobalConfig() { return this.provider === "firestore" ? FirestoreImpl.getGlobalConfig() : JsonImpl.getGlobalConfig(); }
+    async getGlobalConfig() { 
+        let conf = this.provider === "firestore" ? await FirestoreImpl.getGlobalConfig() : await JsonImpl.getGlobalConfig(); 
+        if(!conf.jackpot_pool) conf.jackpot_pool = 50000; // Varsayılan Başlangıç İkramiyesi
+        return conf;
+    }
     async saveGlobalConfig(conf) { return this.provider === "firestore" ? FirestoreImpl.saveGlobalConfig(conf) : JsonImpl.saveGlobalConfig(conf); }
     async addAuditLog(entry) { return this.provider === "firestore" ? FirestoreImpl.addAuditLog(entry) : JsonImpl.addAuditLog(entry); }
 }
@@ -244,7 +248,7 @@ class StorageManager {
 // ============================================================================
 const JsonImpl = {
     file: path.join(process.cwd(), "data", "metacoin.json"),
-    data: { users: {}, inventories: {}, transactions: {}, loans: {}, investments: {}, cooldowns: {}, system_config: { blacklist: [], economy_freeze: false }, audit_logs: [] },
+    data: { users: {}, inventories: {}, transactions: {}, loans: {}, investments: {}, cooldowns: {}, system_config: { blacklist: [], economy_freeze: false, jackpot_pool: 50000 }, audit_logs: [] },
     dirty: false,
     async init() {
         const dir = path.join(process.cwd(), "data");
@@ -288,7 +292,7 @@ const JsonImpl = {
     async setCooldown(id, cmd, ms) { this.data.cooldowns[`${id}:${cmd}`] = nowSec() + Math.ceil(ms / 1000); this.mark(); },
     async resetCooldown(id, cmd) { delete this.data.cooldowns[`${id}:${cmd}`]; this.mark(); },
     async getAllUsers() { return Object.values(this.data.users); },
-    async getGlobalConfig() { return this.data.system_config || { blacklist: [], economy_freeze: false }; },
+    async getGlobalConfig() { return this.data.system_config || { blacklist: [], economy_freeze: false, jackpot_pool: 50000 }; },
     async saveGlobalConfig(conf) { this.data.system_config = conf; this.mark(); },
     async addAuditLog(entry) { this.data.audit_logs.push(entry); if (this.data.audit_logs.length > 500) this.data.audit_logs.shift(); this.mark(); }
 };
@@ -326,7 +330,7 @@ const FirestoreImpl = {
     async setCooldown(id, cmd, ms) { await db.collection("users").doc(id).collection("cooldowns").doc(cmd).set({ expiresAt: nowSec() + Math.ceil(ms / 1000) }); },
     async resetCooldown(id, cmd) { await db.collection("users").doc(id).collection("cooldowns").doc(cmd).delete(); },
     async getAllUsers() { const s = await db.collection("users").get(); return s.docs.map(d => d.data()); },
-    async getGlobalConfig() { const s = await db.collection("system").doc("config").get(); return s.exists ? s.data() : { blacklist: [], economy_freeze: false }; },
+    async getGlobalConfig() { const s = await db.collection("system").doc("config").get(); return s.exists ? s.data() : { blacklist: [], economy_freeze: false, jackpot_pool: 50000 }; },
     async saveGlobalConfig(conf) { await db.collection("system").doc("config").set(conf, { merge: true }); },
     async addAuditLog(entry) { await db.collection("audit_logs").doc(entry.id).set(entry); }
 };
@@ -541,7 +545,6 @@ async function repayLoan(userId, loanId, amountStr) {
         const totalAvailable = u.wallet + u.bank;
         if (totalAvailable < amount) throw new Error("Cüzdan ve banka toplamınız yetersiz.");
         
-        // Hybrid drain: Wallet first, then Bank
         if (u.wallet >= amount) {
             u.wallet = Math.max(0, u.wallet - amount);
         } else {
@@ -771,8 +774,181 @@ async function sellAllProcess(userId) {
 }
 
 // ============================================================================
-// 19. GAMBLING SYSTEMS
+// 19. GAMBLING ENGINES (SLOTS & BET) - GOD TIER UPGRADE
 // ============================================================================
+
+const SLOT_SYMBOLS = [
+    { id: "👑", weight: 2, mult3: "JACKPOT", mult2: 0, type: "legendary" },
+    { id: "7️⃣", weight: 6, mult3: 20, mult2: 0, type: "epic" },
+    { id: "💎", weight: 10, mult3: 10, mult2: 0, type: "epic" },
+    { id: "🔔", weight: 15, mult3: 5, mult2: 0, type: "rare" },
+    { id: "🍉", weight: 20, mult3: 3, mult2: 0.5, type: "common" },
+    { id: "🍋", weight: 25, mult3: 2, mult2: 0.5, type: "common" },
+    { id: "🍒", weight: 30, mult3: 1.5, mult2: 0.5, type: "common" },
+    { id: "✨", weight: 5, mult3: "FREESPIN", mult2: "FREESPIN_MINI", type: "scatter" }
+];
+
+async function processAdvancedSlots(userId, betStr) {
+    await DB.acquireLock(userId);
+    try {
+        const u = await DB.getUser(userId);
+        const conf = await DB.getGlobalConfig();
+        
+        let isFreeSpin = false;
+        let finalBet = 0;
+        
+        if (u.free_spins > 0 && (betStr === "free" || validateAmount(betStr, true) === "all")) {
+            isFreeSpin = true;
+            u.free_spins -= 1;
+            finalBet = 1000; // Free spin base value
+        } else {
+            let bet = validateAmount(betStr, true) === "all" ? u.wallet : validateAmount(betStr);
+            finalBet = bet;
+            if (finalBet > Number(MAX_SLOTS_AMOUNT)) finalBet = Number(MAX_SLOTS_AMOUNT);
+            if (u.wallet < finalBet || finalBet <= 0) throw new Error("Yetersiz bakiye veya hatalı bahis miktarı.");
+            u.wallet = Math.max(0, u.wallet - finalBet);
+            conf.jackpot_pool += Math.floor(finalBet * 0.02); // %2 goes to jackpot
+        }
+
+        updateStat(u, "slots_plays", 1);
+        
+        // 3x3 Grid Generation
+        const grid = [];
+        for (let i = 0; i < 3; i++) {
+            grid.push([choiceWeighted(SLOT_SYMBOLS), choiceWeighted(SLOT_SYMBOLS), choiceWeighted(SLOT_SYMBOLS)]);
+        }
+
+        // We check the MIDDLE row (index 1) for main win line
+        const payline = grid[1];
+        const s1 = payline[0], s2 = payline[1], s3 = payline[2];
+        
+        let win = false;
+        let grossWin = 0;
+        let eventMsg = "";
+        let isJackpot = false;
+
+        // Win Logic
+        if (s1.id === s2.id && s2.id === s3.id) {
+            win = true;
+            if (s1.mult3 === "JACKPOT") {
+                isJackpot = true;
+                grossWin = conf.jackpot_pool + (finalBet * 50);
+                conf.jackpot_pool = 50000; // Reset
+                eventMsg = "🚨 **MEGA JACKPOT!!!** 🚨";
+            } else if (s1.mult3 === "FREESPIN") {
+                u.free_spins += 5;
+                eventMsg = "✨ **5 FREE SPIN KAZANDIN!** ✨";
+            } else {
+                grossWin = Math.floor(finalBet * s1.mult3);
+                eventMsg = `🔥 **ÜÇLÜ EŞLEŞME!** (${s1.mult3}x)`;
+            }
+        } else if (s1.id === s2.id || s2.id === s3.id || s1.id === s3.id) {
+            let matchSymbol = (s1.id === s2.id) ? s1 : (s2.id === s3.id) ? s2 : s1;
+            if (matchSymbol.mult2 === "FREESPIN_MINI") {
+                win = true; u.free_spins += 1;
+                eventMsg = "✨ **1 FREE SPIN KAZANDIN!**";
+            } else if (matchSymbol.mult2 > 0) {
+                win = true; grossWin = Math.floor(finalBet * matchSymbol.mult2);
+                eventMsg = `👍 **İkili Eşleşme!** (${matchSymbol.mult2}x Teselli)`;
+            }
+        }
+
+        let netWin = 0, tax = 0;
+        if (win && grossWin > 0) {
+            const taxed = applyTax(grossWin - finalBet, "gamble", u);
+            tax = taxed.tax;
+            netWin = taxed.amount;
+            u.wallet += (finalBet + netWin); // Refund bet + add net
+            updateStat(u, "largest_win", netWin, true);
+            updateStat(u, "total_earned", netWin);
+        } else if (!win) {
+            updateStat(u, "largest_loss", finalBet, true);
+            updateStat(u, "total_lost", finalBet);
+            eventMsg = "💀 Maalesef kaybettin.";
+        }
+
+        await DB.saveUser(userId, u);
+        await DB.saveGlobalConfig(conf);
+
+        return { 
+            grid, win, grossWin, netWin, tax, finalBet, isFreeSpin, 
+            eventMsg, isJackpot, currentJackpot: conf.jackpot_pool 
+        };
+    } finally { DB.releaseLock(userId); }
+}
+
+const BET_RISK = {
+    "low": { chance: 48, mult: 1.5, name: "Düşük Risk" },
+    "medium": { chance: 30, mult: 2.5, name: "Orta Risk" },
+    "high": { chance: 10, mult: 8, name: "Yüksek Risk" },
+    "extreme": { chance: 3, mult: 25, name: "Ekstrem Risk" }
+};
+
+async function processAdvancedBet(userId, riskLevel, betStr) {
+    if (!BET_RISK[riskLevel]) throw new Error("Geçersiz risk seviyesi.");
+    await DB.acquireLock(userId);
+    try {
+        const u = await DB.getUser(userId);
+        let finalBet = validateAmount(betStr, true) === "all" ? u.wallet : validateAmount(betStr);
+        if (finalBet > Number(MAX_BET_AMOUNT)) finalBet = Number(MAX_BET_AMOUNT);
+        if (u.wallet < finalBet || finalBet <= 0) throw new Error("Yetersiz cüzdan bakiyesi.");
+        
+        u.wallet = Math.max(0, u.wallet - finalBet);
+        updateStat(u, "bet_plays", 1);
+        
+        const riskData = BET_RISK[riskLevel];
+        
+        // Streak modifier (+1% chance per win, max +5%)
+        let chanceMod = 0;
+        if (u.bet_streak > 0 && u.bet_streak_type === "win") {
+            chanceMod = Math.min(5, u.bet_streak);
+        }
+        
+        const roll = randint(1, 100);
+        const winChance = riskData.chance + chanceMod;
+        const win = roll <= winChance;
+        
+        let grossWin = 0, eventMsg = "";
+        
+        if (win) {
+            u.bet_streak = (u.bet_streak_type === "win") ? u.bet_streak + 1 : 1;
+            u.bet_streak_type = "win";
+            
+            // Streak multiplier bonus (+0.1x per win, max +0.5x)
+            let multBonus = Math.min(0.5, (u.bet_streak - 1) * 0.1);
+            let finalMult = riskData.mult + multBonus;
+            
+            grossWin = Math.floor(finalBet * finalMult);
+            eventMsg = `🎉 **Başarılı!** (${finalMult.toFixed(1)}x Çarpan)`;
+        } else {
+            u.bet_streak = (u.bet_streak_type === "loss") ? u.bet_streak + 1 : 1;
+            u.bet_streak_type = "loss";
+            eventMsg = `💥 **Kasa Kazandı.**`;
+        }
+
+        let netWin = 0, tax = 0;
+        if (win && grossWin > 0) {
+            const taxed = applyTax(grossWin - finalBet, "gamble", u);
+            tax = taxed.tax;
+            netWin = taxed.amount;
+            u.wallet += (finalBet + netWin);
+            updateStat(u, "largest_win", netWin, true);
+            updateStat(u, "total_earned", netWin);
+        } else {
+            updateStat(u, "largest_loss", finalBet, true);
+            updateStat(u, "total_lost", finalBet);
+        }
+
+        await DB.saveUser(userId, u);
+        
+        return { 
+            win, roll, winChance, riskName: riskData.name,
+            finalBet, grossWin, netWin, tax, eventMsg,
+            streak: u.bet_streak, streakType: u.bet_streak_type
+        };
+    } finally { DB.releaseLock(userId); }
+}
+
 async function doAction(userId, actionType) {
     await DB.acquireLock(userId);
     try {
@@ -838,54 +1014,6 @@ async function processRob(userId, targetId) {
     } finally { DB.releaseLock(userId); DB.releaseLock(targetId); }
 }
 
-async function processGamble(userId, type, betStr, extra) {
-    const bet = validateAmount(betStr, true) === "all" ? "all" : validateAmount(betStr);
-    const maxBet = type === "slots" ? Number(MAX_SLOTS_AMOUNT) : Number(MAX_COINFLIP_AMOUNT);
-    
-    await DB.acquireLock(userId);
-    try {
-        const u = await DB.getUser(userId);
-        let finalBet = bet === "all" ? u.wallet : bet;
-        if (finalBet > maxBet) finalBet = maxBet;
-        if (u.wallet < finalBet || finalBet <= 0) throw new Error("Yetersiz cüzdan bakiyesi.");
-        
-        let win = false, grossWin = 0, eventData = {};
-        if (type === "coinflip") {
-            updateStat(u, "coinflip_plays", 1);
-            const flip = randint(0, 1) === 0 ? "heads" : "tails";
-            eventData.flip = flip;
-            if (flip === extra) { win = true; grossWin = finalBet * 2; }
-        } 
-        else if (type === "slots") {
-            updateStat(u, "slots_plays", 1);
-            const s = ["🍒", "💎", "🍀", "7️⃣", "⭐"];
-            const a = s[randint(0,4)], b = s[randint(0,4)], c = s[randint(0,4)];
-            eventData.reels = [a, b, c];
-            if (a === b && b === c) {
-                const t = { "🍒": 3, "⭐": 4, "🍀": 5, "💎": 7, "7️⃣": 15 };
-                grossWin = Math.floor(finalBet * (t[a] || 3)); win = true;
-            } else if (a === b || b === c || a === c) {
-                grossWin = Math.floor(finalBet * 1.5); win = true;
-            }
-        }
-
-        if (win) {
-            const netWin = grossWin - finalBet;
-            const { amount: taxedNetWin, tax } = applyTax(netWin, "gamble", u);
-            u.wallet += taxedNetWin;
-            updateStat(u, "largest_win", taxedNetWin, true);
-            updateStat(u, "total_earned", taxedNetWin);
-            eventData.netWin = taxedNetWin; eventData.tax = tax;
-        } else {
-            u.wallet = Math.max(0, u.wallet - finalBet);
-            updateStat(u, "largest_loss", finalBet, true);
-            updateStat(u, "total_lost", finalBet);
-        }
-        await DB.saveUser(userId, u);
-        return { win, ...eventData, bet: finalBet };
-    } finally { DB.releaseLock(userId); }
-}
-
 // ============================================================================
 // 20. COOLDOWN SYSTEMS (Abstracted above)
 // ============================================================================
@@ -907,7 +1035,7 @@ async function writeAuditLog(adminId, action, targetId, details) {
 }
 
 // ============================================================================
-// 24. SLASH COMMAND BUILDERS (100% s.string() Validated)
+// 24. SLASH COMMAND BUILDERS (100% Validated)
 // ============================================================================
 const commands = [
     new SlashCommandBuilder().setName("help").setDescription("MetaCoin REBORN komut yardım listesi"),
@@ -921,11 +1049,17 @@ const commands = [
     new SlashCommandBuilder().setName("crime").setDescription("Suç işleyin (Riskli)."),
     new SlashCommandBuilder().setName("rob").setDescription("Soygun yapın (Riskli).").addUserOption(o => o.setName("hedef").setRequired(true).setDescription("Kurban")),
     
-    new SlashCommandBuilder().setName("bet").setDescription("Yazı tura.")
-        .addStringOption(o => o.setName("taraf").setRequired(true).setDescription("heads/tails").addChoices({ name: "heads", value: "heads" }, { name: "tails", value: "tails" }))
+    new SlashCommandBuilder().setName("bet").setDescription("Gelişmiş riskli bahis sistemi.")
+        .addStringOption(o => o.setName("risk").setRequired(true).setDescription("Risk Seviyesi").addChoices(
+            { name: "🟢 Düşük Risk (%48 Kazanma, 1.5x)", value: "low" }, 
+            { name: "🟡 Orta Risk (%30 Kazanma, 2.5x)", value: "medium" },
+            { name: "🔴 Yüksek Risk (%10 Kazanma, 8x)", value: "high" },
+            { name: "🔥 Ekstrem Risk (%3 Kazanma, 25x)", value: "extreme" }
+        ))
         .addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar veya 'all'")),
     
-    new SlashCommandBuilder().setName("slots").setDescription("Slot makinesi.").addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar veya 'all'")),
+    new SlashCommandBuilder().setName("slots").setDescription("Gelişmiş Jackpot Slot Makinesi.")
+        .addStringOption(o => o.setName("miktar").setRequired(true).setDescription("Miktar, 'all' veya free spin için 'free'")),
     
     new SlashCommandBuilder().setName("shop").setDescription("Mağazayı görüntüle.")
         .addStringOption(o => o.setName("kategori").setDescription("crates/items").addChoices({ name: "crates", value: "crates" }, { name: "items", value: "items" })),
@@ -984,7 +1118,6 @@ const commands = [
         .addSubcommand(s => s.setName("richest").setDescription("En zenginler")).addSubcommand(s => s.setName("level").setDescription("En yüksek leveller"))
         .addSubcommand(s => s.setName("wallet").setDescription("Sadece cüzdan")).addSubcommand(s => s.setName("bank").setDescription("Sadece banka")),
 
-    // Admin System (Extended to God Tier)
     new SlashCommandBuilder().setName("admin").setDescription("Yönetici Komutları")
         .addSubcommand(s=> s.setName("addcoins").setDescription("Para ver").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).setDescription("Hesap türü").addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
         .addSubcommand(s=> s.setName("removecoins").setDescription("Para sil").addUserOption(o=>o.setName("hedef").setRequired(true).setDescription("Kime")).addStringOption(o=>o.setName("tur").setRequired(true).setDescription("Hesap türü").addChoices({name:"wallet",value:"wallet"},{name:"bank",value:"bank"})).addIntegerOption(o=>o.setName("miktar").setRequired(true).setDescription("Miktar")))
@@ -1011,27 +1144,27 @@ const allSlashJSON = commands.map(c => c.toJSON());
 const handlers = {
     help: async (i) => {
         const e = embedBase().setTitle("MetaCoin REBORN • Gelişmiş Sistem Rehberi")
-            .setDescription("Economy v1.1.0 — Kapsamlı finans ve bankacılık hizmetinizde.")
-            .addFields(
+            .setDescription("Economy v2.0.0 — Kapsamlı finans, casino ve bankacılık hizmetinizde.")
+            .addFields([
                 { name: "🏦 Finans", value: "`/balance`, `/deposit`, `/withdraw`, `/pay`, `/bank upgrade`, `/bank interest`, `/finance`" },
                 { name: "📈 Kredi & Yatırım", value: "`/loan take`, `/loan repay`, `/loan list`, `/loan info`\n`/investment create`, `/investment claim`, `/investment break`" },
                 { name: "🛠️ İş & Gelir", value: "`/daily`, `/work`, `/beg`, `/crime`, `/rob`" },
-                { name: "🎲 Kumar", value: "`/bet`, `/slots`" },
+                { name: "🎲 Casino & Kumar", value: "`/bet`, `/slots`" },
                 { name: "📦 Ticaret", value: "`/shop`, `/buy`, `/open`, `/inventory`, `/sell`, `/sellall`" },
                 { name: "🏆 Sosyal", value: "`/leaderboard`, `/top`, `/profile view`, `/stats`, `/rank`, `/cooldowns`" }
-            );
+            ]);
         await replySafe(i, { embeds: [e] });
     },
     balance: async (i) => {
         const target = i.options.getUser("kullanici") || i.user;
         const u = await getUserWithInterest(target.id);
         const net = await getNetworth(target.id);
-        const e = embedBase().setTitle(`Bakiye — ${target.username}`).setThumbnail(target.displayAvatarURL())
-            .addFields(
+        const e = embedBase().setTitle(`🏦 | Bakiye Durumu — ${target.username}`).setThumbnail(target.displayAvatarURL())
+            .addFields([
                 { name: "Cüzdan", value: fmt(u.wallet), inline: true },
                 { name: "Banka", value: `${fmt(u.bank)} / ${fmt(u.bank_max)}`, inline: true },
                 { name: "Net Değer", value: fmt(net), inline: true }
-            );
+            ]);
         await replySafe(i, { embeds: [e] });
     },
     finance: async (i) => {
@@ -1041,38 +1174,38 @@ const handlers = {
         const debt = loans.reduce((acc, l) => acc + l.total_due, 0);
         const pendingInv = invs.reduce((acc, l) => acc + l.return_amount, 0);
         const net = await getNetworth(i.user.id);
-        const e = embedBase(THEME.finance).setTitle(`Bütünsel Finans — ${i.user.username}`).setThumbnail(i.user.displayAvatarURL())
-            .addFields(
+        const e = embedBase(THEME.finance).setTitle(`📊 | Bütünsel Finans — ${i.user.username}`).setThumbnail(i.user.displayAvatarURL())
+            .addFields([
                 { name: "Likidite", value: `Cüzdan: ${fmt(u.wallet)}\nBanka: ${fmt(u.bank)}`, inline: true },
                 { name: "Varlık", value: `Networth: ${fmt(net)}\nKredi Puanı: ${u.credit_score}`, inline: true },
                 { name: "Borç / Alacak", value: `Aktif Borç: ${fmt(debt)} (${loans.length} Kredi)\nBekleyen Yatırım: ${fmt(pendingInv)} (${invs.length})`, inline: true },
                 { name: "Vergi & Faiz Analizi", value: `Ödenen Toplam Vergi: ${fmt(u.total_taxes_paid || 0)}\nKazanılan Pasif Faiz: ${fmt(u.total_interest_earned || 0)}` }
-            );
+            ]);
         await replySafe(i, { embeds: [e] });
     },
     deposit: async (i) => {
         const placed = await processDeposit(i.user.id, i.options.getString("miktar"));
-        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ Bankaya **${fmt(placed)}** yatırıldı.`)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ | Bankaya **${fmt(placed)}** yatırıldı.`)] });
     },
     withdraw: async (i) => {
         const { net, tax, total } = await processWithdraw(i.user.id, i.options.getString("miktar"));
-        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ Bankadan **${fmt(total)}** çekildi.\n*Vergi: ${fmt(tax)} (Ele geçen: ${fmt(net)})*`)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ | Bankadan **${fmt(total)}** çekildi.\n*Vergi: ${fmt(tax)} (Ele geçen: ${fmt(net)})*`)] });
     },
     pay: async (i) => {
         const target = i.options.getUser("hedef");
         if (target.bot) throw new Error("Botlara para atamazsın.");
         const { net, tax, total } = await processTransfer(i.user.id, target.id, i.options.getString("miktar"));
-        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💸 **${target.username}** adlı kullanıcıya **${fmt(net)}** ulaştı.\n*(Gönderilen: ${fmt(total)}, Vergi: ${fmt(tax)})*`)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💸 | **${target.username}** adlı kullanıcıya **${fmt(net)}** ulaştı.\n*(Gönderilen: ${fmt(total)}, Vergi: ${fmt(tax)})*`)] });
     },
     daily: async (i) => {
         const r = await doAction(i.user.id, "daily");
         if (!r.ok) return replySafe(i, { flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
-        await replySafe(i, { embeds: [embedBase(THEME.success).setTitle("🎁 Günlük Ödül").setDescription(`Kazanılan: **${fmt(r.earned)}**\n🔥 Seri: **${r.streak} Gün**`)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setTitle("🎁 | Günlük Ödül").setDescription(`Kazanılan: **${fmt(r.earned)}**\n🔥 Seri: **${r.streak} Gün**`)] });
     },
     work: async (i) => {
         const r = await doAction(i.user.id, "work");
         if (!r.ok) return replySafe(i, { flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
-        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🛠️ **${r.event}**. Maaş: **${fmt(r.earned)}**\n🌟 *+15 XP*`)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🛠️ | **${r.event}**. Maaş: **${fmt(r.earned)}**\n🌟 *+15 XP*`)] });
     },
     beg: async (i) => {
         const r = await doAction(i.user.id, "beg");
@@ -1083,36 +1216,52 @@ const handlers = {
     crime: async (i) => {
         const r = await doAction(i.user.id, "crime");
         if (!r.ok && r.left) return replySafe(i, { flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
-        if (r.ok) await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🕶️ Mükemmel bir vurgun! **${fmt(r.earned)}** kaldırdın.\n🌟 *+25 XP*`)] });
-        else await replySafe(i, { embeds: [embedBase(THEME.error).setDescription(`🚨 Polise yakalandın! Rüşvet: **${fmt(r.riskLost)}**`)] });
+        if (r.ok) await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🕶️ | Mükemmel bir vurgun! **${fmt(r.earned)}** kaldırdın.\n🌟 *+25 XP*`)] });
+        else await replySafe(i, { embeds: [embedBase(THEME.error).setDescription(`🚨 | Polise yakalandın! Rüşvet: **${fmt(r.riskLost)}**`)] });
     },
     rob: async (i) => {
         const target = i.options.getUser("hedef");
         if (target.bot) throw new Error("Botları soyamazsın.");
         const r = await processRob(i.user.id, target.id);
         if (r.cooldown) return replySafe(i, { flags: MessageFlags.Ephemeral, content: `⏳ Bekle: **${msToHuman(r.left)}**` });
-        if (r.ok) await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🥷 **${target.username}** soyuldu! Ganimet: **${fmt(r.amount)}**`)] });
-        else await replySafe(i, { embeds: [embedBase(THEME.error).setDescription(`🚨 **${target.username}** polisi aradı! Ceza: **${fmt(r.fine)}**`)] });
+        if (r.ok) await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🥷 | **${target.username}** soyuldu! Ganimet: **${fmt(r.amount)}**`)] });
+        else await replySafe(i, { embeds: [embedBase(THEME.error).setDescription(`🚨 | **${target.username}** polisi aradı! Ceza: **${fmt(r.fine)}**`)] });
     },
     bet: async (i) => {
-        const r = await processGamble(i.user.id, "coinflip", i.options.getString("miktar"), i.options.getString("taraf"));
-        let desc = `Bahis: **${i.options.getString("taraf")}**\nAtılan: **${r.flip}**\n\nSonuç: ${r.win ? `**KAZANDIN!**` : `**KAYBETTİN!** (-${fmt(r.bet)})`}`;
+        const r = await processAdvancedBet(i.user.id, i.options.getString("risk"), i.options.getString("miktar"));
+        let desc = `**Seçim:** ${r.riskName} (Kazanma İhtimali: %${r.winChance})\n`;
+        desc += `**Yatırılan:** ${fmt(r.finalBet)}\n`;
+        desc += `**Sonuç Zarı:** \`${r.roll}\` / 100\n\n`;
+        desc += `${r.eventMsg}\n`;
+        
         if (r.win) desc += `\nNet Kazanç: **${fmt(r.netWin)}** *(Vergi: ${fmt(r.tax)})*`;
-        await replySafe(i, { embeds: [embedBase(THEME.gamble).setTitle("🪙 Yazı Tura").setDescription(desc)] });
+        if (r.streak > 1) desc += `\n🔥 **Streak:** ${r.streak} (${r.streakType === 'win' ? 'Kazanma Serisi' : 'Kaybetme Serisi'})`;
+        
+        await replySafe(i, { embeds: [embedBase(r.win ? THEME.success : THEME.error).setTitle("🎲 | Gelişmiş Bet Sonucu").setDescription(desc)] });
     },
     slots: async (i) => {
-        const r = await processGamble(i.user.id, "slots", i.options.getString("miktar"));
-        let desc = `[ ${r.reels.join(" | ")} ]\n\nSonuç: ${r.win ? `**KAZANDIN!**` : `**KAYBETTİN!** (-${fmt(r.bet)})`}`;
-        if (r.win) desc += `\nNet Kazanç: **${fmt(r.netWin)}** *(Vergi: ${fmt(r.tax)})*`;
-        await replySafe(i, { embeds: [embedBase(THEME.gamble).setTitle("🎰 Slot Makinesi").setDescription(desc)] });
+        const r = await processAdvancedSlots(i.user.id, i.options.getString("miktar"));
+        
+        const renderRow = (row) => `[ ${row[0].id} | ${row[1].id} | ${row[2].id} ]`;
+        let gridDisplay = `\n${renderRow(r.grid[0])}\n**► ${renderRow(r.grid[1])} ◄**\n${renderRow(r.grid[2])}\n`;
+        
+        let desc = `**Mevcut Havuz (Jackpot):** ${fmt(r.currentJackpot)}\n`;
+        desc += `**Bahis:** ${r.isFreeSpin ? "✨ Bedava Çevirme" : fmt(r.finalBet)}\n`;
+        desc += gridDisplay + "\n";
+        desc += `**Sonuç:** ${r.eventMsg}\n`;
+        
+        if (r.win && r.grossWin > 0) desc += `Net Kazanç: **${fmt(r.netWin)}** *(Vergi: ${fmt(r.tax)})*`;
+        
+        const color = r.isJackpot ? THEME.jackpot : (r.win ? THEME.success : THEME.error);
+        await replySafe(i, { embeds: [embedBase(color).setTitle("🎰 | Jackpot Slot Makinesi").setDescription(desc)] });
     },
     buy: async (i) => {
         const r = await buyItemOrCrate(i.user.id, i.options.getString("urun"), i.options.getString("adet"));
-        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🛒 **${r.count}x ${r.name}** başarıyla alındı. Harcanan: **${fmt(r.total)}**`)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🛒 | **${r.count}x ${r.name}** başarıyla alındı. Harcanan: **${fmt(r.total)}**`)] });
     },
     open: async (i) => {
         const r = await openCrates(i.user.id, i.options.getString("kasa"), i.options.getString("adet"));
-        let desc = `📦 **${r.count}** adet başarıyla açıldı!\n\n**Kazanılanlar:**\n`;
+        let desc = `📦 | **${r.count}** adet başarıyla açıldı!\n\n**Kazanılanlar:**\n`;
         if (r.totalCoins > 0) desc += `🪙 **${fmt(r.totalCoins)}**\n`;
         const itemMap = {}; r.results.filter(x => x.type === "item").forEach(x => itemMap[x.item] = (itemMap[x.item] || 0) + x.qty);
         for (const [it, q] of Object.entries(itemMap)) desc += `🔹 **${it}**: x${q}\n`;
@@ -1120,51 +1269,53 @@ const handlers = {
     },
     sell: async (i) => {
         const r = await sellItems(i.user.id, i.options.getString("esya"), i.options.getString("adet"));
-        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💱 **${r.count}** adet eşya satıldı. Kazanç: **${fmt(r.gain)}**`)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💱 | **${r.count}** adet eşya satıldı. Kazanç: **${fmt(r.gain)}**`)] });
     },
     sellall: async (i) => {
         const r = await sellAllProcess(i.user.id);
-        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💱 Envanterindeki satılabilir tüm eşyaları sattın (${r.totalItems} adet).\nToplam Kazanç: **${fmt(r.totalGain)}**`)] });
+        await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💱 | Envanterindeki satılabilir tüm eşyaları sattın (${r.totalItems} adet).\nToplam Kazanç: **${fmt(r.totalGain)}**`)] });
     },
     inventory: async (i) => {
         const target = i.options.getUser("kullanici") || i.user;
         const inv = await DB.getInventory(target.id);
+        const u = await DB.getUser(target.id);
         const crates = [], items = [];
         for (const [k, v] of Object.entries(inv)) { if (k.endsWith("crate")) crates.push(`• **${k}**: x${v}`); else items.push(`• **${k}**: x${v}`); }
-        const e = embedBase().setTitle(`🎒 Envanter — ${target.username}`).addFields(
+        const e = embedBase().setTitle(`🎒 | Envanter — ${target.username}`).addFields([
             { name: "📦 Kasalar", value: crates.join("\n") || "*Kasa yok*", inline: true },
-            { name: "🧰 Eşyalar", value: items.join("\n") || "*Eşya yok*", inline: true }
-        );
+            { name: "🧰 Eşyalar", value: items.join("\n") || "*Eşya yok*", inline: true },
+            { name: "✨ Özel Haklar", value: `Slot Free Spins: **${u.free_spins || 0}**`, inline: false }
+        ]);
         await replySafe(i, { embeds: [e] });
     },
     shop: async (i) => {
         const cat = i.options.getString("kategori") || "crates";
         const e = embedBase(THEME.shop);
         if (cat === "crates") {
-            e.setTitle("🛒 Mağaza — Kasalar").setDescription("`/buy urun:<isim> adet:<n>`");
-            for (const [k, v] of Object.entries(CRATES)) e.addFields({ name: `📦 ${k}`, value: `Fiyat: ${fmt(v.price)}\n*${v.desc}*` });
+            e.setTitle("🛒 | Mağaza — Kasalar").setDescription("`/buy urun:<isim> adet:<n>`");
+            for (const [k, v] of Object.entries(CRATES)) e.addFields([{ name: `📦 ${k}`, value: `Fiyat: ${fmt(v.price)}\n*${v.desc}*` }]);
         } else {
-            e.setTitle("🛒 Mağaza — Eşyalar").setDescription("`/buy urun:<isim> adet:<n>`");
-            for (const [k, v] of Object.entries(SHOP_ITEMS)) e.addFields({ name: `🔧 ${k}`, value: `Fiyat: ${fmt(v.price)}\n*${v.desc}*` });
+            e.setTitle("🛒 | Mağaza — Eşyalar").setDescription("`/buy urun:<isim> adet:<n>`");
+            for (const [k, v] of Object.entries(SHOP_ITEMS)) e.addFields([{ name: `🔧 ${k}`, value: `Fiyat: ${fmt(v.price)}\n*${v.desc}*` }]);
         }
         await replySafe(i, { embeds: [e] });
     },
     crateinfo: async (i) => {
-        const e = embedBase().setTitle("ℹ️ Kasa Oranları");
+        const e = embedBase().setTitle("ℹ️ | Kasa Oranları");
         for (const [k, v] of Object.entries(CRATES)) {
             const str = v.loot.map(l => l.type === "coins" ? `🪙 Para (${fmt(l.min)}-${fmt(l.max)}) [%${l.weight}]` : `🔹 ${l.item} (${l.min}-${l.max}) [%${l.weight}]`).join("\n");
-            e.addFields({ name: `📦 ${k} (${fmt(v.price)})`, value: str });
+            e.addFields([{ name: `📦 ${k} (${fmt(v.price)})`, value: str }]);
         }
         await replySafe(i, { embeds: [e] });
     },
     tax: async (i) => {
-        const e = embedBase(THEME.finance).setTitle("⚖️ Güncel Vergi Oranları")
+        const e = embedBase(THEME.finance).setTitle("⚖️ | Güncel Vergi Oranları")
             .setDescription("Sistemdeki para akışını dengelemek için vergi uygulanır.")
-            .addFields(
+            .addFields([
                 { name: "Para Transferi (Pay)", value: `%${(Number(TAX_RATE_TRANSFER)*100).toFixed(1)}`, inline: true },
                 { name: "Bankadan Çekim (Withdraw)", value: `%${(Number(TAX_RATE_WITHDRAW)*100).toFixed(1)}`, inline: true },
                 { name: "Kumar Kazançları", value: `%${(Number(TAX_RATE_GAMBLING_WIN)*100).toFixed(1)}`, inline: true }
-            );
+            ]);
         await replySafe(i, { embeds: [e] });
     },
     bank: async (i) => {
@@ -1177,17 +1328,17 @@ const handlers = {
                 if (u.wallet < cost) throw new Error(`Banka kapasitesi artırımı için ${fmt(cost)} gerekli.`);
                 u.wallet -= cost; u.bank_max += 25000;
                 await DB.saveUser(i.user.id, u);
-                await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🏦 Kapasite artırıldı! Yeni sınır: **${fmt(u.bank_max)}**`)] });
+                await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`🏦 | Kapasite artırıldı! Yeni sınır: **${fmt(u.bank_max)}**`)] });
             } finally { DB.releaseLock(i.user.id); }
         } 
         else if (sub === "interest") {
             const u = await getUserWithInterest(i.user.id);
-            const e = embedBase(THEME.finance).setTitle("🏦 Faiz Sistemi").addFields(
+            const e = embedBase(THEME.finance).setTitle("🏦 | Faiz Sistemi").addFields([
                 { name: "Faiz Oranı", value: `%${(Number(INTEREST_RATE_SAVINGS)*100).toFixed(1)} / Periyot`, inline: true },
                 { name: "Faiz Periyodu", value: `${INTEREST_INTERVAL_HOURS} Saat`, inline: true },
                 { name: "Max Birikim Limiti", value: `${INTEREST_MAX_IDLE_HOURS} Saat`, inline: true },
                 { name: "Senin Durumun", value: `Şu ana kadar pasif faizden **${fmt(u.total_interest_earned || 0)}** kazandın.\nBankanda faiz işlemesi için min **${fmt(INTEREST_MIN_BALANCE)}** olmalıdır. Sen paranı kullandıkça faiz hesaplanır.` }
-            );
+            ]);
             await replySafe(i, { embeds: [e] });
         }
         else if (sub === "statement") {
@@ -1195,32 +1346,32 @@ const handlers = {
             if (!txs.length) throw new Error("Henüz hiçbir işleminiz bulunmuyor.");
             txs.sort((a,b) => b.timestamp - a.timestamp);
             const lines = txs.slice(0, 15).map(t => `\`[${new Date(t.timestamp * 1000).toLocaleString("tr-TR")}]\` **${t.type.toUpperCase()}** - ${fmt(t.amount)}`).join("\n");
-            await replySafe(i, { embeds: [embedBase(THEME.finance).setTitle("📄 Son 15 İşlem").setDescription(lines)] });
+            await replySafe(i, { embeds: [embedBase(THEME.finance).setTitle("📄 | Son 15 İşlem").setDescription(lines)] });
         }
         else if (sub === "depositall") {
             const placed = await processDeposit(i.user.id, "all");
-            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ Bankaya **${fmt(placed)}** yatırıldı.`)] });
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ | Bankaya **${fmt(placed)}** yatırıldı.`)] });
         }
         else if (sub === "withdrawall") {
             const { net, tax, total } = await processWithdraw(i.user.id, "all");
-            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ Bankadan **${fmt(total)}** çekildi.\n*Vergi: ${fmt(tax)} (Ele geçen: ${fmt(net)})*`)] });
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`✅ | Bankadan **${fmt(total)}** çekildi.\n*Vergi: ${fmt(tax)} (Ele geçen: ${fmt(net)})*`)] });
         }
     },
     loan: async (i) => {
         const sub = i.options.getSubcommand();
         if (sub === "take") {
             const loan = await takeLoan(i.user.id, i.options.getString("miktar"));
-            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💳 Kredi onaylandı!\n\n**Çekilen:** ${fmt(loan.amount)}\n**Toplam Geri Ödenecek:** ${fmt(loan.total_due)}\n**Son Ödeme:** <t:${loan.due_date}:d>\n**ID:** \`${loan.id}\``)] });
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💳 | Kredi onaylandı!\n\n**Çekilen:** ${fmt(loan.amount)}\n**Toplam Geri Ödenecek:** ${fmt(loan.total_due)}\n**Son Ödeme:** <t:${loan.due_date}:d>\n**ID:** \`${loan.id}\``)] });
         } else if (sub === "repay") {
             const r = await repayLoan(i.user.id, i.options.getString("id"), i.options.getString("miktar"));
-            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💳 Kredi ödemesi alındı!\n\n**Ödenen:** ${fmt(r.paid)}\n**Kalan Borç:** ${fmt(r.left)}\n${r.cleared ? '✅ **Borç Kapandı!**' : ''}`)] });
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`💳 | Kredi ödemesi alındı!\n\n**Ödenen:** ${fmt(r.paid)}\n**Kalan Borç:** ${fmt(r.left)}\n${r.cleared ? '✅ **Borç Kapandı!**' : ''}`)] });
         } else if (sub === "list") {
             const u = await DB.getUser(i.user.id);
             const loans = await DB.getLoans(i.user.id);
             checkLoanPenalties(u, loans); 
             if (!loans.length) throw new Error("Aktif kredin bulunmuyor.");
-            const e = embedBase(THEME.finance).setTitle("💳 Aktif Krediler");
-            for(let l of loans) e.addFields({name: `ID: ${l.id} ${l.is_penalized ? '⚠️ CEZALI' : ''}`, value: `**Borç:** ${fmt(l.total_due)}\n**Son Ödeme:** <t:${l.due_date}:R>`, inline: false});
+            const e = embedBase(THEME.finance).setTitle("💳 | Aktif Krediler");
+            for(let l of loans) e.addFields([{name: `ID: ${l.id} ${l.is_penalized ? '⚠️ CEZALI' : ''}`, value: `**Borç:** ${fmt(l.total_due)}\n**Son Ödeme:** <t:${l.due_date}:R>`, inline: false}]);
             await replySafe(i, { embeds: [e] });
         } else if (sub === "info") {
             const u = await DB.getUser(i.user.id);
@@ -1228,13 +1379,13 @@ const handlers = {
             const limit = (u.level * 5000) + (networth * 0.1) + (u.credit_score * 100);
             const loans = await DB.getLoans(i.user.id);
             const debt = loans.reduce((a, l) => a + l.total_due, 0);
-            const e = embedBase(THEME.finance).setTitle("💳 Kredi Skoru & Limit").addFields(
+            const e = embedBase(THEME.finance).setTitle("💳 | Kredi Skoru & Limit").addFields([
                 { name: "Kredi Puanı", value: `${u.credit_score} / 1000`, inline: true },
                 { name: "Kredi Limiti", value: `${fmt(limit)}`, inline: true },
                 { name: "Mevcut Borç", value: `${fmt(debt)}`, inline: true },
                 { name: "Aktif Kredi", value: `${loans.length} / ${LOAN_MAX_ACTIVE_COUNT}`, inline: true },
                 { name: "Sistem", value: `Faiz Oranı: %${Number(INTEREST_RATE_LOAN)*100}\nGecikme Cezası: %${Number(LOAN_LATE_PENALTY_RATE)*100}` }
-            );
+            ]);
             await replySafe(i, { embeds: [e] });
         }
     },
@@ -1242,22 +1393,22 @@ const handlers = {
         const sub = i.options.getSubcommand();
         if (sub === "create") {
             const inv = await createInvestment(i.user.id, i.options.getString("miktar"), i.options.getString("gun"));
-            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`📈 Yatırım oluşturuldu!\n\n**Yatırılan:** ${fmt(inv.amount)}\n**Vade Sonu Getiri:** ${fmt(inv.return_amount)}\n**Kilit Açılma:** <t:${inv.unlocks_at}:R>\n**ID:** \`${inv.id}\``)] });
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`📈 | Yatırım oluşturuldu!\n\n**Yatırılan:** ${fmt(inv.amount)}\n**Vade Sonu Getiri:** ${fmt(inv.return_amount)}\n**Kilit Açılma:** <t:${inv.unlocks_at}:R>\n**ID:** \`${inv.id}\``)] });
         } else if (sub === "claim") {
             const r = await claimInvestment(i.user.id, i.options.getString("id"), false);
             await writeAuditLog(i.user.id, "INVESTMENT_CLAIM", i.user.id, `Kazanç: ${r.payout}`);
-            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`📈 Yatırım vadesi doldu ve çekildi!\n\n**Kazanılan:** ${fmt(r.payout)}`)] });
+            await replySafe(i, { embeds: [embedBase(THEME.success).setDescription(`📈 | Yatırım vadesi doldu ve çekildi!\n\n**Kazanılan:** ${fmt(r.payout)}`)] });
         } else if (sub === "break") {
             const r = await claimInvestment(i.user.id, i.options.getString("id"), true);
-            await replySafe(i, { embeds: [embedBase(THEME.error).setDescription(`⚠️ Yatırım erken bozuldu (Cezalı)!\n\n**Kurtarılan:** ${fmt(r.payout)}\n*Kredi Puanın düştü.*`)] });
+            await replySafe(i, { embeds: [embedBase(THEME.error).setDescription(`⚠️ | Yatırım erken bozuldu (Cezalı)!\n\n**Kurtarılan:** ${fmt(r.payout)}\n*Kredi Puanın düştü.*`)] });
         } else if (sub === "list") {
             const invs = await DB.getInvestments(i.user.id);
             if (!invs.length) throw new Error("Aktif yatırımın bulunmuyor.");
-            const e = embedBase(THEME.finance).setTitle("📈 Aktif Yatırımlar");
+            const e = embedBase(THEME.finance).setTitle("📈 | Aktif Yatırımlar");
             for(let inv of invs) {
                 let timeLeft = inv.unlocks_at - nowSec();
                 let timeStr = timeLeft > 0 ? `<t:${inv.unlocks_at}:R>` : "✅ Hazır";
-                e.addFields({name: `ID: ${inv.id}`, value: `**Yatırılan:** ${fmt(inv.amount)} ➔ **Getiri:** ${fmt(inv.return_amount)}\n**Durum:** ${timeStr}`, inline: false});
+                e.addFields([{name: `ID: ${inv.id}`, value: `**Yatırılan:** ${fmt(inv.amount)} ➔ **Getiri:** ${fmt(inv.return_amount)}\n**Durum:** ${timeStr}`, inline: false}]);
             }
             await replySafe(i, { embeds: [e] });
         }
@@ -1268,46 +1419,46 @@ const handlers = {
             const left = await checkCooldownLeft(i.user.id, k);
             lines.push(`**${k.toUpperCase()}**: ${left > 0 ? msToHuman(left) : "✅ Hazır"}`);
         }
-        await replySafe(i, { flags: MessageFlags.Ephemeral, embeds: [embedBase().setTitle("⏱️ Bekleme Süreleri").setDescription(lines.join("\n"))] });
+        await replySafe(i, { flags: MessageFlags.Ephemeral, embeds: [embedBase().setTitle("⏱️ | Bekleme Süreleri").setDescription(lines.join("\n"))] });
     },
     profile: async (i) => {
         if (i.options.getSubcommand() === "setbio") {
             await DB.acquireLock(i.user.id);
             try {
                 const u = await DB.getUser(i.user.id); u.bio = i.options.getString("metin").slice(0, 180); await DB.saveUser(i.user.id, u);
-                await replySafe(i, { embeds: [embedBase(THEME.success).setDescription("✅ Biyografi güncellendi.")] });
+                await replySafe(i, { embeds: [embedBase(THEME.success).setDescription("✅ | Biyografi güncellendi.")] });
             } finally { DB.releaseLock(i.user.id); }
         } else {
             const target = i.options.getUser("kullanici") || i.user;
             const u = await DB.getUser(target.id);
             const xpBar = makeXpBar(u.xp, u.level * 500);
-            const e = embedBase().setTitle(`👤 Profil — ${target.username}`).setThumbnail(target.displayAvatarURL())
+            const e = embedBase().setTitle(`👤 | Profil — ${target.username}`).setThumbnail(target.displayAvatarURL())
                 .setDescription(u.bio ? `*"${u.bio}"*` : "*Biyografi ayarlanmamış.*")
-                .addFields(
+                .addFields([
                     { name: "⭐ Seviye & XP", value: `Level **${u.level}**\n\`${xpBar}\` (${u.xp} / ${u.level*500})`, inline: false },
                     { name: "💰 Net Değer", value: fmt(await getNetworth(target.id)), inline: true },
                     { name: "💳 Kredi Puanı", value: `${u.credit_score}`, inline: true },
                     { name: "🔥 Günlük Seri", value: `${u.daily_streak} Gün`, inline: true },
                     { name: "📅 Oluşturulma", value: `<t:${u.created_at}:D>`, inline: true }
-                );
+                ]);
             await replySafe(i, { embeds: [e] });
         }
     },
     stats: async (i) => {
         const target = i.options.getUser("kullanici") || i.user;
         const u = await DB.getUser(target.id); const s = u.stats;
-        const e = embedBase().setTitle(`📈 İstatistikler — ${target.username}`)
-            .addFields(
+        const e = embedBase().setTitle(`📈 | İstatistikler — ${target.username}`)
+            .addFields([
                 { name: "💸 Toplam Kazanılan", value: fmt(s.total_earned), inline: true },
                 { name: "📉 Toplam Kaybedilen", value: fmt(s.total_lost), inline: true },
                 { name: "🧰 Kasa & Eşya", value: `Kasa: ${s.crates_opened} | Eşya: ${s.items_sold}`, inline: true },
                 { name: "🛠️ Meslekler", value: `İş: ${s.work_uses} | Dilenci: ${s.beg_uses}`, inline: true },
                 { name: "🚨 Suç & Soygun", value: `Suç Başarı: ${s.crime_success} | Soygun: ${s.rob_success}`, inline: true },
-                { name: "🎰 Kumar Oyunları", value: `Slot: ${s.slots_plays} | CF: ${s.coinflip_plays}`, inline: true },
+                { name: "🎰 Casino", value: `Slot: ${s.slots_plays} | Bet: ${s.bet_plays}`, inline: true },
                 { name: "🔥 En Büyük Tek Kazanç", value: fmt(s.largest_win), inline: true },
                 { name: "💀 En Büyük Tek Kayıp", value: fmt(s.largest_loss), inline: true },
                 { name: "💰 Pasif Gelir (Faiz)", value: fmt(u.total_interest_earned || 0), inline: true }
-            );
+            ]);
         await replySafe(i, { embeds: [e] });
     },
     leaderboard: async (i) => {
@@ -1321,14 +1472,14 @@ const handlers = {
         }
         arr.sort((a,b) => b.val - a.val);
         const lines = arr.slice(0, 10).map((r, idx) => `**${idx + 1}.** <@${r.id}> — ${fmt(r.val)}`).join("\n") || "Kayıt yok.";
-        await replySafe(i, { embeds: [embedBase().setTitle(`🏆 Top 10 — ${type.toUpperCase()}`).setDescription(lines)] });
+        await replySafe(i, { embeds: [embedBase().setTitle(`🏆 | Top 10 — ${type.toUpperCase()}`).setDescription(lines)] });
     },
     top: async (i) => {
         const sub = i.options.getSubcommand();
         const all = await DB.getAllUsers();
         let arr = [];
         if (sub === "crates") arr = all.map(u => ({id: u.user_id, val: u.stats.crates_opened || 0}));
-        if (sub === "gamblers") arr = all.map(u => ({id: u.user_id, val: (u.stats.slots_plays||0) + (u.stats.coinflip_plays||0)}));
+        if (sub === "gamblers") arr = all.map(u => ({id: u.user_id, val: (u.stats.slots_plays||0) + (u.stats.bet_plays||0)}));
         if (sub === "richest") arr = await Promise.all(all.map(async u => ({ id: u.user_id, val: await getNetworth(u.user_id) })));
         if (sub === "level") arr = all.map(u => ({id: u.user_id, val: u.level || 1}));
         if (sub === "wallet") arr = all.map(u => ({id: u.user_id, val: u.wallet || 0}));
@@ -1337,7 +1488,7 @@ const handlers = {
         arr.sort((a,b) => b.val - a.val);
         const formatVal = (sub === "richest" || sub === "wallet" || sub === "bank") ? fmt : (x => x);
         const lines = arr.slice(0, 10).map((r, idx) => `**${idx + 1}.** <@${r.id}> — ${formatVal(r.val)}`).join("\n") || "Kayıt yok.";
-        await replySafe(i, { embeds: [embedBase().setTitle(`🏆 Top 10 — ${sub.toUpperCase()}`).setDescription(lines)] });
+        await replySafe(i, { embeds: [embedBase().setTitle(`🏆 | Top 10 — ${sub.toUpperCase()}`).setDescription(lines)] });
     },
     rank: async (i) => {
         const all = await DB.getAllUsers();
@@ -1349,12 +1500,12 @@ const handlers = {
             const idx = arr.findIndex(x => x.id === i.user.id);
             return idx !== -1 ? `#${idx + 1}` : "Yok";
         };
-        await replySafe(i, { embeds: [embedBase().setTitle(`📊 Sıralaman`).addFields(
+        await replySafe(i, { embeds: [embedBase().setTitle(`📊 | Sıralaman`).addFields([
             { name: "Cüzdan Sırası", value: await getRank("wallet"), inline: true },
             { name: "Banka Sırası", value: await getRank("bank"), inline: true },
             { name: "Networth Sırası", value: await getRank("networth"), inline: true },
             { name: "Level Sırası", value: await getRank("level"), inline: true }
-        )]});
+        ])]});
     },
 
     // ------------------------------------------------------------------------
@@ -1363,7 +1514,7 @@ const handlers = {
     admin: async (i) => {
         if (!ADMIN_LIST.includes(i.user.id)) throw new Error("⛔ Yetkisiz erişim. Bu komut sadece Owner/Admin listesindekiler içindir.");
         const sub = i.options.getSubcommand();
-        const e = embedBase(THEME.admin).setTitle("🛠️ Admin Paneli");
+        const e = embedBase(THEME.admin).setTitle("🛠️ | Admin Paneli");
         let logAction = "", logDetails = "";
 
         if (["addcoins", "removecoins", "setcoins"].includes(sub)) {
@@ -1472,8 +1623,9 @@ const handlers = {
         }
         else if (sub === "economyinfo") {
             const all = await DB.getAllUsers();
+            const conf = await DB.getGlobalConfig();
             const w = all.reduce((a,u) => a + u.wallet, 0); const b = all.reduce((a,u) => a + u.bank, 0);
-            e.setDescription(`**Genel Ekonomi Durumu**\nKayıtlı Profil: ${all.length}\nDolaşan Nakit: ${fmt(w)}\nBanka Rezervi: ${fmt(b)}\nToplam Hacim: ${fmt(w+b)}`);
+            e.setDescription(`**Genel Ekonomi Durumu**\nKayıtlı Profil: ${all.length}\nDolaşan Nakit: ${fmt(w)}\nBanka Rezervi: ${fmt(b)}\nToplam Hacim: ${fmt(w+b)}\nJackpot Havuzu: ${fmt(conf.jackpot_pool)}`);
         }
         await replySafe(i, { embeds: [e], flags: MessageFlags.Ephemeral });
     }
@@ -1490,7 +1642,6 @@ async function replySafe(interaction, payload) {
             await interaction.reply(payload);
         }
     } catch (e) {
-        // Çift tetiklenme veya zaman aşımı gibi masum hataları yoksay
         if (e.code === 10062 || e.code === 40060) return;
         errorLog("ReplySafe Error", e);
     }
@@ -1538,7 +1689,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 const deferOptions = isEphemeral ? { flags: MessageFlags.Ephemeral } : {};
                 await interaction.deferReply(deferOptions);
             } catch (deferErr) {
-                // Eğer bota tam bu saniyede reset atılıp bot çift çalışıyorsa, ikincisini iptal et
                 if (deferErr.code === 40060 || deferErr.code === 10062) return;
                 throw deferErr;
             }
@@ -1556,7 +1706,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (err.code === 40060 || err.code === 10062) return;
 
         const isSystemError = err.message.includes("DiscordAPI") || err.message.includes("is not defined") || err.message.includes("read properties");
-        const msg = !isSystemError ? `❌ ${err.message}` : "❌ Beklenmeyen teknik bir sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.";
+        const msg = !isSystemError ? `❌ | ${err.message}` : "❌ | Beklenmeyen teknik bir sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.";
         if (isSystemError) errorLog(`System Error (${interaction.commandName})`, err);
         
         let errPayload = USE_GLOBAL_ERROR_EMBEDS === "true" 
