@@ -2,11 +2,10 @@
   "name": "metacoin-bot",
   "version": "1.0.0",
   "description": "Discord OWO tarzı ekonomi botu — MetaCoin",
-  "type": "module",
-  "main": "src/index.js",
+  "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "register": "cross-env REGISTER_COMMANDS=true node src/index.js",
+    "register": "cross-env REGISTER_COMMANDS=true node index.js",
     "postinstall": "npm rebuild better-sqlite3 || true"
   },
   "engines": {
