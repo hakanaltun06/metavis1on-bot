@@ -52,7 +52,7 @@ if (!DISCORD_TOKEN || !CLIENT_ID) {
 }
 const ADMIN_LIST = OWNER_IDS.split(",").map(id => id.trim()).filter(Boolean);
 const IS_DEBUG = DEBUG === "true";
-const VERSION = "2.0.0 - GOD TIER";
+const VERSION = "2.0.0";
 
 // ============================================================================
 // 3. CONSTANTS
