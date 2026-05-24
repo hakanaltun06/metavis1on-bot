@@ -1,36 +1,24 @@
 const { EmbedBuilder } = require('discord.js');
-const { COLORS } = require('./constants');
+const {
+    COLOR_SUCCESS,
+    COLOR_ERROR,
+    COLOR_INFO,
+    COLOR_WARNING,
+    COLOR_PREMIUM
+} = require('./constants');
 
-module.exports = {
-    successEmbed: (title, description) => {
-        return new EmbedBuilder()
-            .setColor(COLORS.SUCCESS)
-            .setTitle(`✅ ${title}`)
-            .setDescription(description);
-    },
-    errorEmbed: (title, description) => {
-        return new EmbedBuilder()
-            .setColor(COLORS.ERROR)
-            .setTitle(`⛔ ${title}`)
-            .setDescription(description);
-    },
-    infoEmbed: (title, description) => {
-        return new EmbedBuilder()
-            .setColor(COLORS.INFO)
-            .setTitle(`ℹ️ ${title}`)
-            .setDescription(description);
-    },
-    profileEmbed: (user, userData, discordUser) => {
-        return new EmbedBuilder()
-            .setColor(COLORS.PREMIUM)
-            .setAuthor({ name: `${discordUser.username} - Finansal Profil`, iconURL: discordUser.displayAvatarURL() })
-            .addFields(
-                { name: '💰 Cüzdan', value: `**${userData.wallet.toLocaleString()}** MC`, inline: true },
-                { name: '🏦 Banka', value: `**${userData.bank.toLocaleString()} / ${userData.bankMax.toLocaleString()}** MC`, inline: true },
-                { name: '📈 Seviye & XP', value: `Seviye **${userData.level}** (${userData.xp} XP)`, inline: true },
-                { name: '📊 İstatistikler', value: `Kazanılan: **${userData.stats.totalEarned.toLocaleString()}** MC\nKaybedilen: **${userData.stats.totalLost.toLocaleString()}** MC`, inline: false }
-            )
-            .setFooter({ text: 'MetaCoin Güvencesiyle' })
-            .setTimestamp();
-    }
-};
+function createEmbed(type, title, desc = '') {
+    const embed = new EmbedBuilder().setTitle(title).setDescription(desc);
+    if (type === 'success') embed.setColor(COLOR_SUCCESS);
+    if (type === 'error') embed.setColor(COLOR_ERROR);
+    if (type === 'info') embed.setColor(COLOR_INFO);
+    if (type === 'warn') embed.setColor(COLOR_WARNING);
+    if (type === 'premium') embed.setColor(COLOR_PREMIUM);
+    return embed;
+}
+
+function genericErrorEmbed() {
+    return createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Bu komut işlenirken bir sorun çıktı. Biraz sonra tekrar dener misin?');
+}
+
+module.exports = { createEmbed, genericErrorEmbed };
