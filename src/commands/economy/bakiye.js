@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { ensureUser } = require('../../database/users');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
@@ -11,7 +12,7 @@ module.exports = {
     },
     async execute(interaction) {
         const target = interaction.options.getUser('kullanici') || interaction.user;
-        if (target.bot) return interaction.reply({ embeds: [createEmbed('error', '❌ Olmaz', 'Botların bakiyesi olmaz.')], ephemeral: true });
+        if (target.bot) return interaction.reply({ embeds: [createEmbed('error', '❌ Olmaz', 'Botların bakiyesi olmaz.')], flags: MessageFlags.Ephemeral });
 
         const userData = await ensureUser(target.id);
         const total = Number(userData.wallet) + Number(userData.bank);

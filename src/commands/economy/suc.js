@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { pool } = require('../../database/pool');
 const { ensureUser } = require('../../database/users');
 const { addMoney, removeMoney } = require('../../database/money');
@@ -15,7 +16,7 @@ module.exports = {
         const lastDate = userData.last_crime ? new Date(userData.last_crime) : new Date(0);
 
         if (now - lastDate < COOLDOWNS.CRIME) {
-            return interaction.reply({ embeds: [createEmbed('warn', '🚔 Ortalık Kızgın', `Polis peşinde. **${getMins(COOLDOWNS.CRIME - (now - lastDate))} dk** ortalıktan kaybol.`)], ephemeral: true });
+            return interaction.reply({ embeds: [createEmbed('warn', '🚔 Ortalık Kızgın', `Polis peşinde. **${getMins(COOLDOWNS.CRIME - (now - lastDate))} dk** ortalıktan kaybol.`)], flags: MessageFlags.Ephemeral });
         }
 
         await pool.query('UPDATE economy_users SET last_crime = CURRENT_TIMESTAMP WHERE user_id = $1', [interaction.user.id]);

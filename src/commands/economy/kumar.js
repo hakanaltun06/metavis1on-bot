@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { pool } = require('../../database/pool');
 const { ensureUser } = require('../../database/users');
 const { addMoney, removeMoney } = require('../../database/money');
@@ -19,11 +20,11 @@ module.exports = {
     },
     async execute(interaction) {
         const amount = interaction.options.getInteger('miktar');
-        if (amount < GAMBLE_MIN_BET) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${GAMBLE_MIN_BET}.`)], ephemeral: true });
+        if (amount < GAMBLE_MIN_BET) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${GAMBLE_MIN_BET}.`)], flags: MessageFlags.Ephemeral });
 
         const userData = await ensureUser(interaction.user.id);
         if (Number(userData.wallet) < amount) {
-            return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', `Cüzdanında ${fmtMoney(amount)} yok.`)], ephemeral: true });
+            return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', `Cüzdanında ${fmtMoney(amount)} yok.`)], flags: MessageFlags.Ephemeral });
         }
 
         const hasAmulet = await checkItem(interaction.user.id, 'lucky_amulet');

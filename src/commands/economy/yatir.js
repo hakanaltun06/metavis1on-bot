@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { withTx } = require('../../database/tx');
 const { ensureUser } = require('../../database/users');
 const { moveWalletToBank } = require('../../database/money');
@@ -33,14 +34,14 @@ module.exports = {
                 return { kind: 'ok', amount };
             });
 
-            if (result.kind === 'invalid') return interaction.reply({ embeds: [createEmbed('error', '❌ Geçersiz Miktar', 'Geçerli bir sayı yaz.')], ephemeral: true });
-            if (result.kind === 'no_wallet') return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında bu kadar para yok.')], ephemeral: true });
-            if (result.kind === 'full') return interaction.reply({ embeds: [createEmbed('warn', '🏦 Banka Dolu', 'Bankanda yer kalmamış. Kapasiteni artırman gerekiyor. `/banka-yukselt` ile seviyeni yükseltebilirsin.')], ephemeral: true });
-            if (result.kind === 'over') return interaction.reply({ embeds: [createEmbed('warn', '🏦 Yer Yetersiz', `Bankanda sadece ${fmtMoney(result.room)} kadar yer var. Daha fazlasını yatırabilmek için kapasiteni artır.`)], ephemeral: true });
+            if (result.kind === 'invalid') return interaction.reply({ embeds: [createEmbed('error', '❌ Geçersiz Miktar', 'Geçerli bir sayı yaz.')], flags: MessageFlags.Ephemeral });
+            if (result.kind === 'no_wallet') return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında bu kadar para yok.')], flags: MessageFlags.Ephemeral });
+            if (result.kind === 'full') return interaction.reply({ embeds: [createEmbed('warn', '🏦 Banka Dolu', 'Bankanda yer kalmamış. Kapasiteni artırman gerekiyor. `/banka-yukselt` ile seviyeni yükseltebilirsin.')], flags: MessageFlags.Ephemeral });
+            if (result.kind === 'over') return interaction.reply({ embeds: [createEmbed('warn', '🏦 Yer Yetersiz', `Bankanda sadece ${fmtMoney(result.room)} kadar yer var. Daha fazlasını yatırabilmek için kapasiteni artır.`)], flags: MessageFlags.Ephemeral });
             return interaction.reply({ embeds: [createEmbed('success', '🏦 Bankaya Yatırıldı', `${fmtMoney(result.amount)} bankaya geçti.`)] });
         } catch (err) {
             console.error('Yatır hatası:', err && err.message ? err.message : err);
-            return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], ephemeral: true });
+            return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });
         }
     }
 };

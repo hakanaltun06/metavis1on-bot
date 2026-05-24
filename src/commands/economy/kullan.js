@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { pool } = require('../../database/pool');
 const { checkItem, consumeItem } = require('../../database/inventory');
 const { createEmbed } = require('../../utils/embeds');
@@ -13,10 +14,10 @@ module.exports = {
         const itemId = interaction.options.getString('esya').toLowerCase();
         const hasQty = await checkItem(interaction.user.id, itemId);
 
-        if (hasQty <= 0) return interaction.reply({ embeds: [createEmbed('error', '❌ Yok', 'Bu eşyaya sahip değilsin.')], ephemeral: true });
+        if (hasQty <= 0) return interaction.reply({ embeds: [createEmbed('error', '❌ Yok', 'Bu eşyaya sahip değilsin.')], flags: MessageFlags.Ephemeral });
 
         const item = findItem(itemId);
-        if (!item || item.type !== 'consumable') return interaction.reply({ embeds: [createEmbed('warn', '❌ Kullanılamaz', 'Bu eşya pasif veya süs amaçlı. Doğrudan kullanılamıyor.')], ephemeral: true });
+        if (!item || item.type !== 'consumable') return interaction.reply({ embeds: [createEmbed('warn', '❌ Kullanılamaz', 'Bu eşya pasif veya süs amaçlı. Doğrudan kullanılamıyor.')], flags: MessageFlags.Ephemeral });
 
         if (itemId === 'energy_drink') {
             await pool.query('UPDATE economy_users SET last_work = NULL, last_crime = NULL WHERE user_id = $1', [interaction.user.id]);

@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { resolveCommand } = require('../commands');
 const { genericErrorEmbed } = require('../utils/embeds');
 
@@ -15,9 +16,9 @@ function attachInteractionHandler(client) {
             console.error(`Komut hatası (${requestedName}):`, error && error.message ? error.message : error);
             const errEmbed = genericErrorEmbed();
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ embeds: [errEmbed], ephemeral: true }).catch(() => null);
+                await interaction.followUp({ embeds: [errEmbed], flags: MessageFlags.Ephemeral }).catch(() => null);
             } else {
-                await interaction.reply({ embeds: [errEmbed], ephemeral: true }).catch(() => null);
+                await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral }).catch(() => null);
             }
         }
     });

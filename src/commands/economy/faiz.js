@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { withTx } = require('../../database/tx');
 const { ensureUser } = require('../../database/users');
 const { applyInterest } = require('../../database/bank');
@@ -44,25 +45,25 @@ module.exports = {
             });
 
             if (result.kind === 'no_balance') {
-                return interaction.reply({ embeds: [createEmbed('warn', '🏦 Faiz', 'Faiz kazanmak için önce bankana para yatırmalısın.')], ephemeral: true });
+                return interaction.reply({ embeds: [createEmbed('warn', '🏦 Faiz', 'Faiz kazanmak için önce bankana para yatırmalısın.')], flags: MessageFlags.Ephemeral });
             }
             if (result.kind === 'wait') {
                 const hours = Math.floor(result.leftMs / 3600000);
                 const mins = Math.floor((result.leftMs % 3600000) / 60000);
-                return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Yeni faiz almak için **${hours} saat ${mins} dakika** beklemen gerekiyor.`)], ephemeral: true });
+                return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Yeni faiz almak için **${hours} saat ${mins} dakika** beklemen gerekiyor.`)], flags: MessageFlags.Ephemeral });
             }
             if (result.kind === 'too_small') {
-                return interaction.reply({ embeds: [createEmbed('warn', '🏦 Faiz', 'Bankandaki miktar henüz faiz işlemek için çok düşük. Biraz daha para yatırmalısın.')], ephemeral: true });
+                return interaction.reply({ embeds: [createEmbed('warn', '🏦 Faiz', 'Bankandaki miktar henüz faiz işlemek için çok düşük. Biraz daha para yatırmalısın.')], flags: MessageFlags.Ephemeral });
             }
             if (result.kind === 'full') {
-                return interaction.reply({ embeds: [createEmbed('warn', '🏦 Banka Dolu', 'Bankan dolu olduğu için faiz eklenemedi. Kapasiteni artırman gerekiyor.')], ephemeral: true });
+                return interaction.reply({ embeds: [createEmbed('warn', '🏦 Banka Dolu', 'Bankan dolu olduğu için faiz eklenemedi. Kapasiteni artırman gerekiyor.')], flags: MessageFlags.Ephemeral });
             }
 
             const note = result.wasCapped ? '\nBankan dolduğu için faizin sadece sığan kısmı eklendi.' : '';
             return interaction.reply({ embeds: [createEmbed('success', '🏦 Faiz İşlendi', `Bankana ${fmtMoney(result.credited)} eklendi.${note}`)] });
         } catch (err) {
             console.error('Faiz hatası:', err && err.message ? err.message : err);
-            return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Faiz işlenirken bir sorun çıktı. Biraz sonra tekrar dener misin?')], ephemeral: true });
+            return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Faiz işlenirken bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });
         }
     }
 };

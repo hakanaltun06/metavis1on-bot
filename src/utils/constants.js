@@ -37,12 +37,22 @@ const COOLDOWNS = {
     MONTHLY: 2592000000   // 30 gün
 };
 
+// Enflasyon / piyasa ayarları
+// Baz para arzı: tüm sunucudaki toplam para bu seviyeye yakınsa fiyatlar normal kabul edilir.
+const BASE_MONEY_SUPPLY = 5000000;
+const PRICE_INDEX_MIN = 0.90;
+const PRICE_INDEX_MAX = 3.20;
+
 // Market eşyaları
+// volatility alanı opsiyoneldir; yoksa 1.0 kabul edilir.
+//  - 1.0: normal duyarlılık
+//  - >1.0: enflasyondan daha çok etkilenir (lüks/nadir)
+//  - <1.0: enflasyondan daha az etkilenir (zorunlu/tüketim)
 const SHOP_ITEMS = [
-    { id: 'rob_shield', name: '🛡️ Soygun Kalkanı', desc: 'Seni bir soygundan korur. (Pasif)', price: 15000, type: 'passive' },
-    { id: 'lucky_amulet', name: '🍀 Şans Tılsımı', desc: 'Kumar oyunlarında şansını %5 artırır. (Pasif)', price: 50000, type: 'passive' },
-    { id: 'energy_drink', name: '⚡ Enerji İçeceği', desc: 'Çalışma ve suç bekleme sürelerini anında sıfırlar. (Kullanılabilir)', price: 7500, type: 'consumable' },
-    { id: 'vip_badge', name: '💎 VIP Rozeti', desc: 'Profili süsler, prestij göstergesidir.', price: 500000, type: 'flex' }
+    { id: 'rob_shield', name: '🛡️ Soygun Kalkanı', desc: 'Seni bir soygundan korur. (Pasif)', price: 15000, type: 'passive', volatility: 1.0 },
+    { id: 'lucky_amulet', name: '🍀 Şans Tılsımı', desc: 'Kumar oyunlarında şansını %5 artırır. (Pasif)', price: 50000, type: 'passive', volatility: 1.2 },
+    { id: 'energy_drink', name: '⚡ Enerji İçeceği', desc: 'Çalışma ve suç bekleme sürelerini anında sıfırlar. (Kullanılabilir)', price: 7500, type: 'consumable', volatility: 0.85 },
+    { id: 'vip_badge', name: '💎 VIP Rozeti', desc: 'Profili süsler, prestij göstergesidir.', price: 500000, type: 'flex', volatility: 1.3 }
 ];
 
 module.exports = {
@@ -57,5 +67,8 @@ module.exports = {
     INTEREST_INTERVAL_MS,
     INTEREST_RATE,
     COOLDOWNS,
-    SHOP_ITEMS
+    SHOP_ITEMS,
+    BASE_MONEY_SUPPLY,
+    PRICE_INDEX_MIN,
+    PRICE_INDEX_MAX
 };

@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { pool } = require('../../database/pool');
 const { ensureUser } = require('../../database/users');
 const { addMoney } = require('../../database/money');
@@ -19,7 +20,7 @@ module.exports = {
             const left = COOLDOWNS.DAILY - diffMs;
             const hours = Math.floor(left / 3600000);
             const mins = Math.floor((left % 3600000) / 60000);
-            return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Günlük ödülünü zaten aldın. **${hours} saat ${mins} dakika** sonra tekrar uğra.`)], ephemeral: true });
+            return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Günlük ödülünü zaten aldın. **${hours} saat ${mins} dakika** sonra tekrar uğra.`)], flags: MessageFlags.Ephemeral });
         }
 
         const { newStreak, streakBonus, totalReward } = computeDailyReward(userData.daily_streak, diffDays);

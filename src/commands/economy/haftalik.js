@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { pool } = require('../../database/pool');
 const { ensureUser } = require('../../database/users');
 const { addMoney } = require('../../database/money');
@@ -13,7 +14,7 @@ module.exports = {
         const now = new Date();
         const lastDate = userData.last_weekly ? new Date(userData.last_weekly) : new Date(0);
         if (now - lastDate < COOLDOWNS.WEEKLY) {
-            return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Haftalık ödül için **${Math.ceil((COOLDOWNS.WEEKLY - (now - lastDate))/86400000)} gün** beklemen gerek.`)], ephemeral: true });
+            return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Haftalık ödül için **${Math.ceil((COOLDOWNS.WEEKLY - (now - lastDate))/86400000)} gün** beklemen gerek.`)], flags: MessageFlags.Ephemeral });
         }
         const reward = REWARDS.WEEKLY;
         await addMoney(interaction.user.id, reward, 'wallet');

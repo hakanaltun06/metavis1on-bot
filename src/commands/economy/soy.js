@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { withTx } = require('../../database/tx');
 const { ensureUser } = require('../../database/users');
 const { checkItem, consumeItem } = require('../../database/inventory');
@@ -20,8 +21,8 @@ module.exports = {
     },
     async execute(interaction) {
         const target = interaction.options.getUser('hedef');
-        if (target.id === interaction.user.id) return interaction.reply({ embeds: [createEmbed('warn', '❌ Olmaz', 'Kendini soyamazsın.')], ephemeral: true });
-        if (target.bot) return interaction.reply({ embeds: [createEmbed('warn', '❌ Olmaz', 'Botların üzerinde nakit taşımaz.')], ephemeral: true });
+        if (target.id === interaction.user.id) return interaction.reply({ embeds: [createEmbed('warn', '❌ Olmaz', 'Kendini soyamazsın.')], flags: MessageFlags.Ephemeral });
+        if (target.bot) return interaction.reply({ embeds: [createEmbed('warn', '❌ Olmaz', 'Botların üzerinde nakit taşımaz.')], flags: MessageFlags.Ephemeral });
 
         try {
             const result = await withTx(async (db) => {
@@ -58,13 +59,13 @@ module.exports = {
             });
 
             if (result.kind === 'cooldown') {
-                return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Yeni bir plan kurmak için **${getMins(result.leftMs)} dk** beklemen gerek.`)], ephemeral: true });
+                return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Yeni bir plan kurmak için **${getMins(result.leftMs)} dk** beklemen gerek.`)], flags: MessageFlags.Ephemeral });
             }
             if (result.kind === 'self_poor') {
-                return interaction.reply({ embeds: [createEmbed('error', '❌ Cebin Boş', `Soygun planı için cüzdanında en az ${ROB_SELF_MIN_WALLET} ${CURRENCY_NAME} olmalı.`)], ephemeral: true });
+                return interaction.reply({ embeds: [createEmbed('error', '❌ Cebin Boş', `Soygun planı için cüzdanında en az ${ROB_SELF_MIN_WALLET} ${CURRENCY_NAME} olmalı.`)], flags: MessageFlags.Ephemeral });
             }
             if (result.kind === 'target_poor') {
-                return interaction.reply({ embeds: [createEmbed('error', '❌ Değmez', 'Hedefin cüzdanı çok zayıf. Buna değmez.')], ephemeral: true });
+                return interaction.reply({ embeds: [createEmbed('error', '❌ Değmez', 'Hedefin cüzdanı çok zayıf. Buna değmez.')], flags: MessageFlags.Ephemeral });
             }
             if (result.kind === 'shielded') {
                 return interaction.reply({ embeds: [createEmbed('info', '🛡️ Engellendi', `${target.username} kişisinde **Soygun Kalkanı** vardı. Kalkan kırıldı ama hedef güvende.`)] });
@@ -75,7 +76,7 @@ module.exports = {
             return interaction.reply({ embeds: [createEmbed('error', '🚔 Yakalandın', `Hedef uyandı. Kaçarken ${fmtMoney(result.penalty)} düşürdün.`)] });
         } catch (err) {
             console.error('Soy hatası:', err && err.message ? err.message : err);
-            return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], ephemeral: true });
+            return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });
         }
     }
 };

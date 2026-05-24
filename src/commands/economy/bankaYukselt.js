@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { withTx } = require('../../database/tx');
 const { ensureUser } = require('../../database/users');
 const { upgradeBankLevel } = require('../../database/bank');
@@ -31,10 +32,10 @@ module.exports = {
             });
 
             if (result.kind === 'max') {
-                return interaction.reply({ embeds: [createEmbed('info', '🏦 Banka Hesabı', 'Banka hesabın zaten en yüksek seviyede.')], ephemeral: true });
+                return interaction.reply({ embeds: [createEmbed('info', '🏦 Banka Hesabı', 'Banka hesabın zaten en yüksek seviyede.')], flags: MessageFlags.Ephemeral });
             }
             if (result.kind === 'poor') {
-                return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', `Bu yükseltme için cüzdanında ${fmtMoney(result.cost)} olmalı.`)], ephemeral: true });
+                return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', `Bu yükseltme için cüzdanında ${fmtMoney(result.cost)} olmalı.`)], flags: MessageFlags.Ephemeral });
             }
             const embed = createEmbed('success', '🏦 Banka Yükseltildi', `Banka hesabın seviye **${result.newLevel}**'e çıktı.`)
                 .addFields(
@@ -45,7 +46,7 @@ module.exports = {
             return interaction.reply({ embeds: [embed] });
         } catch (err) {
             console.error('Banka yükseltme hatası:', err && err.message ? err.message : err);
-            return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Yükseltme sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], ephemeral: true });
+            return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Yükseltme sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });
         }
     }
 };

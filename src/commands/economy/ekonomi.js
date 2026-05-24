@@ -2,6 +2,11 @@ const { pool } = require('../../database/pool');
 const { createEmbed } = require('../../utils/embeds');
 const { formatNumber } = require('../../utils/format');
 const { CURRENCY, CURRENCY_NAME } = require('../../utils/constants');
+const {
+    calculateInflationIndex,
+    getEconomyMood,
+    formatPriceEffect
+} = require('../../services/economyService');
 
 module.exports = {
     data: { name: 'ekonomi', description: 'Sunucunun genel ekonomi durumunu gösterir.' },
@@ -23,14 +28,21 @@ module.exports = {
         const avgLvl = Number(data.avg_lvl) || 1;
         const maxLvl = Number(data.max_lvl) || 1;
 
+        const totalMoney = tw + tb;
+        const index = calculateInflationIndex(totalMoney);
+        const mood = getEconomyMood(index);
+        const effect = formatPriceEffect(index);
+
         const embed = createEmbed('info', '📊 Ekonomi Durumu')
             .addFields(
                 { name: 'Kayıtlı Kullanıcı', value: `**${data.users}** kişi`, inline: true },
                 { name: 'Cüzdanlardaki Para', value: `${formatNumber(tw)} ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: 'Bankalardaki Para', value: `🏦 ${formatNumber(tb)} ${CURRENCY_NAME}`, inline: true },
-                { name: 'Toplam Servet', value: `**${formatNumber(tw + tb)}** ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
+                { name: 'Toplam Servet', value: `**${formatNumber(totalMoney)}** ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: 'Toplam Faiz Kazancı', value: `${formatNumber(tInt)} ${CURRENCY_NAME}`, inline: true },
-                { name: 'Banka Seviyesi', value: `Ortalama **${avgLvl.toFixed(2)}** — En yüksek **${maxLvl}**`, inline: true }
+                { name: 'Banka Seviyesi', value: `Ortalama **${avgLvl.toFixed(2)}** — En yüksek **${maxLvl}**`, inline: true },
+                { name: 'Piyasa Durumu', value: `**${mood}**`, inline: true },
+                { name: 'Fiyat Etkisi', value: `**${effect}**`, inline: true }
             );
         await interaction.reply({ embeds: [embed] });
     }

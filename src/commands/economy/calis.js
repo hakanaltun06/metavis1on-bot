@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { pool } = require('../../database/pool');
 const { ensureUser } = require('../../database/users');
 const { addMoney } = require('../../database/money');
@@ -16,7 +17,7 @@ module.exports = {
 
         if (now - lastDate < COOLDOWNS.WORK) {
             const left = COOLDOWNS.WORK - (now - lastDate);
-            return interaction.reply({ embeds: [createEmbed('warn', '⏳ Yoruldun', `Biraz nefes al. Yeni iş için **${getMins(left)} dakika** dinlen.`)], ephemeral: true });
+            return interaction.reply({ embeds: [createEmbed('warn', '⏳ Yoruldun', `Biraz nefes al. Yeni iş için **${getMins(left)} dakika** dinlen.`)], flags: MessageFlags.Ephemeral });
         }
 
         const { job, reward } = rollWorkReward();

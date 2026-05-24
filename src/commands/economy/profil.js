@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { ensureUser } = require('../../database/users');
 const { getInventoryTotal, checkItem } = require('../../database/inventory');
 const { createEmbed } = require('../../utils/embeds');
@@ -13,7 +14,7 @@ module.exports = {
     },
     async execute(interaction) {
         const target = interaction.options.getUser('kullanici') || interaction.user;
-        if (target.bot) return interaction.reply({ content: 'Botların profili olmuyor.', ephemeral: true });
+        if (target.bot) return interaction.reply({ content: 'Botların profili olmuyor.', flags: MessageFlags.Ephemeral });
 
         const userData = await ensureUser(target.id);
         const wallet = Number(userData.wallet);

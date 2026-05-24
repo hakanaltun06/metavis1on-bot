@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { withTx } = require('../../database/tx');
 const { ensureUser } = require('../../database/users');
 const { addToWalletPlain, removeFromWalletPlain } = require('../../database/money');
@@ -18,9 +19,9 @@ module.exports = {
         const target = interaction.options.getUser('kullanici');
         const amount = interaction.options.getInteger('miktar');
 
-        if (target.id === interaction.user.id) return interaction.reply({ embeds: [createEmbed('warn', '❌ Olmaz', 'Kendine para gönderemezsin.')], ephemeral: true });
-        if (target.bot) return interaction.reply({ embeds: [createEmbed('warn', '❌ Olmaz', 'Botlara para gönderemezsin.')], ephemeral: true });
-        if (amount <= 0) return interaction.reply({ embeds: [createEmbed('warn', '❌ Geçersiz Miktar', 'Miktar sıfırdan büyük olmalı.')], ephemeral: true });
+        if (target.id === interaction.user.id) return interaction.reply({ embeds: [createEmbed('warn', '❌ Olmaz', 'Kendine para gönderemezsin.')], flags: MessageFlags.Ephemeral });
+        if (target.bot) return interaction.reply({ embeds: [createEmbed('warn', '❌ Olmaz', 'Botlara para gönderemezsin.')], flags: MessageFlags.Ephemeral });
+        if (amount <= 0) return interaction.reply({ embeds: [createEmbed('warn', '❌ Geçersiz Miktar', 'Miktar sıfırdan büyük olmalı.')], flags: MessageFlags.Ephemeral });
 
         try {
             const result = await withTx(async (db) => {
@@ -34,11 +35,11 @@ module.exports = {
                 return { kind: 'ok' };
             });
 
-            if (result.kind === 'no_money') return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında yeterli paran yok.')], ephemeral: true });
+            if (result.kind === 'no_money') return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında yeterli paran yok.')], flags: MessageFlags.Ephemeral });
             return interaction.reply({ embeds: [createEmbed('success', '💸 Para Gönderildi', `**${target.username}** kişisine ${fmtMoney(amount)} gönderdin.`)] });
         } catch (err) {
             console.error('Gönder hatası:', err && err.message ? err.message : err);
-            return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], ephemeral: true });
+            return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });
         }
     }
 };

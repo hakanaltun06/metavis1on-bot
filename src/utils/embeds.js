@@ -8,7 +8,9 @@ const {
 } = require('./constants');
 
 function createEmbed(type, title, desc = '') {
-    const embed = new EmbedBuilder().setTitle(title).setDescription(desc);
+    const embed = new EmbedBuilder();
+    if (title) embed.setTitle(String(title));
+    if (desc) embed.setDescription(String(desc));
     if (type === 'success') embed.setColor(COLOR_SUCCESS);
     if (type === 'error') embed.setColor(COLOR_ERROR);
     if (type === 'info') embed.setColor(COLOR_INFO);

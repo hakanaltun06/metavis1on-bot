@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { OWNER_ID } = require('../config/env');
 const { createEmbed } = require('./embeds');
 
@@ -6,7 +7,7 @@ function checkAdmin(interaction) {
     const member = interaction.member;
     const isAdmin = !!(member && member.permissions && typeof member.permissions.has === 'function' && member.permissions.has('Administrator'));
     if (!isAdmin) {
-        interaction.reply({ embeds: [createEmbed('error', '⛔ Yetki Yok', 'Bu komutu yalnızca yetkili kişiler kullanabilir.')], ephemeral: true });
+        interaction.reply({ embeds: [createEmbed('error', '⛔ Yetki Yok', 'Bu komutu yalnızca yetkili kişiler kullanabilir.')], flags: MessageFlags.Ephemeral });
         return false;
     }
     return true;
