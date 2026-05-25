@@ -114,7 +114,7 @@ module.exports = {
                     await logTransaction(interaction.user.id, null, 'crate_item', 0, `${crate.name} acilisindan ${r.item.name} kazanildi`, db);
                 }
 
-                return { kind: 'ok', rewards, totalCoinReward };
+                return { kind: 'ok', rewards, totalCoinReward, remaining: owned - qty };
             });
 
             if (result.kind === 'no_crate') {
@@ -150,7 +150,7 @@ module.exports = {
             if (result.totalCoinReward > 0) {
                 embed.addFields({ name: 'Toplam MetaCoin', value: fmtMoney(result.totalCoinReward), inline: true });
             }
-
+            embed.addFields({ name: 'Kalan Kasa', value: `**${result.remaining}** adet`, inline: true });
             embed.setFooter({ text: 'Eşyalarını /envanter ile gör · Satılabilir eşyalar için /sat' });
             return interaction.reply({ embeds: [embed] });
 

@@ -116,7 +116,10 @@ async function handleBilgi(interaction) {
     const tier = getCreditTier(u.credit_score);
     const limit = calculateLoanLimit(u);
     const maxActive = getMaxActiveLoans(u.credit_score);
-    const supply = await getMoneySupply();
+    const [supply, loanSummary] = await Promise.all([
+        getMoneySupply(),
+        getLoanSummary(interaction.user.id)
+    ]);
     const inflationIndex = calculateInflationIndex(supply.total);
     const mood = getEconomyMood(inflationIndex);
 
@@ -141,8 +144,20 @@ async function handleBilgi(interaction) {
             { name: 'Aktif Kredi Hakkı', value: `**${maxActive}** kredi`, inline: true },
             { name: 'Tahmini Faiz', value: rateText, inline: true },
             { name: 'Vade Seçenekleri', value: '3 / 7 / 14 gün', inline: true }
-        )
-        .setFooter({ text: 'Puanın ödeme geçmişine göre değişir. Yüksek puan daha iyi koşullar sağlar.' });
+        );
+
+    if (loanSummary.activeCount > 0) {
+        embed.addFields(
+            { name: 'Aktif Kredi', value: `**${loanSummary.activeCount}** adet`, inline: true },
+            { name: 'Açık Borç', value: fmtMoney(loanSummary.activeDebt), inline: true }
+        );
+        if (loanSummary.overdueCount > 0) {
+            embed.addFields({ name: 'Gecikmiş Kredi', value: `**${loanSummary.overdueCount}** adet`, inline: true });
+        }
+    } else {
+        embed.addFields({ name: 'Açık Borç', value: 'Şu anda açık kredi borcun yok.', inline: false });
+    }
+    embed.setFooter({ text: 'Zamanında ödeme yapmak kredi puanını güçlendirir.' });
     return interaction.reply({ embeds: [embed] });
 }
 

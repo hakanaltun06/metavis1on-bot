@@ -1,7 +1,7 @@
 const { getInventory } = require('../../database/inventory');
 const { createEmbed } = require('../../utils/embeds');
 const { formatFull } = require('../../utils/format');
-const { CURRENCY_NAME } = require('../../utils/constants');
+const { CURRENCY, CURRENCY_NAME } = require('../../utils/constants');
 const { findItemById } = require('../../services/shopService');
 const {
     isCrateItem,
@@ -65,7 +65,17 @@ module.exports = {
                 const label = getRarityLabel(def.rarity);
                 return `${emoji} ${def.name} (x${row.quantity}) — *${label}* · ${formatFull(def.sellValue)} ${CURRENCY_NAME}`;
             }).join('\n');
-            embed.addFields({ name: '🏆 Koleksiyon', value: lines, inline: false });
+
+            const colTotal = collectionItems.reduce((s, r) => s + r.quantity, 0);
+            const colValue = collectionItems.reduce((s, r) => {
+                const def = getRareItemByCode(r.item_id);
+                return s + (def ? def.sellValue * r.quantity : 0);
+            }, 0);
+
+            embed.addFields(
+                { name: '🏆 Koleksiyon', value: lines, inline: false },
+                { name: 'Koleksiyon Özeti', value: `Toplam Değer: ${formatFull(colValue)} ${CURRENCY_NAME} ${CURRENCY}\nToplam Adet: **${colTotal}**`, inline: false }
+            );
         }
 
         embed.setFooter({ text: 'Eşya: /kullan · Kasa: /kasa-ac · Satış: /sat' });

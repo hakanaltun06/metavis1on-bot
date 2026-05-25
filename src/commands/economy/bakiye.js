@@ -4,6 +4,7 @@ const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { BANK_LEVELS } = require('../../utils/constants');
 const { calculateFillPct } = require('../../services/bankService');
+const { getLoanSummary } = require('../../database/loans');
 
 module.exports = {
     data: {
@@ -23,6 +24,9 @@ module.exports = {
         const level = userData.bank_level || 1;
         const fillPct = calculateFillPct(bank, limit);
 
+        const isSelf = target.id === interaction.user.id;
+        const loanSummary = isSelf ? await getLoanSummary(target.id) : null;
+
         const embed = createEmbed('info', `💳 ${target.username} — Bakiye`)
             .addFields(
                 { name: 'Cüzdan', value: fmtMoney(wallet), inline: true },
@@ -33,6 +37,17 @@ module.exports = {
                 { name: 'Doluluk', value: `**%${fillPct}**`, inline: true }
             )
             .setThumbnail(target.displayAvatarURL());
+
+        if (loanSummary && loanSummary.activeDebt > 0) {
+            embed.addFields(
+                { name: 'Açık Borç', value: fmtMoney(loanSummary.activeDebt), inline: true },
+                { name: 'Aktif Kredi', value: `**${loanSummary.activeCount}** adet`, inline: true }
+            );
+            embed.setFooter({ text: 'Borç durumunu görmek için /kredi bilgi kullan.' });
+        } else {
+            embed.setFooter({ text: 'Paranı büyütmek için /banka, /faiz ve /market komutlarını kullanabilirsin.' });
+        }
+
         await interaction.reply({ embeds: [embed] });
     }
 };
