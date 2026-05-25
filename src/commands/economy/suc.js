@@ -23,12 +23,26 @@ module.exports = {
 
         const outcome = rollCrime();
         if (outcome.win) {
+            const newWallet = Number(userData.wallet) + outcome.reward;
             await addMoney(interaction.user.id, outcome.reward, 'wallet');
-            return interaction.reply({ embeds: [createEmbed('risk', '🕵️ İş Bitti', `${outcome.scenario} ve kimseye yakalanmadan kaçtın.\nKazandığın: ${fmtMoney(outcome.reward)}`)] });
+            const winEmbed = createEmbed('risk', '🕵️ İş Bitti', outcome.scenario)
+                .addFields(
+                    { name: 'Sonuç', value: '✅ Kazanç', inline: true },
+                    { name: 'Kazanılan', value: fmtMoney(outcome.reward), inline: true },
+                    { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
+                );
+            return interaction.reply({ embeds: [winEmbed] });
         }
 
         const realPenalty = Math.min(outcome.penalty, Number(userData.wallet));
+        const newWallet = Number(userData.wallet) - realPenalty;
         await removeMoney(interaction.user.id, realPenalty, 'wallet');
-        return interaction.reply({ embeds: [createEmbed('error', '🚔 Yakalandın', `Plan ters gitti. Ceza olarak ${fmtMoney(realPenalty)} ödedin.`)] });
+        const loseEmbed = createEmbed('error', '🚔 Yakalandın', 'Plan ters gitti.')
+            .addFields(
+                { name: 'Sonuç', value: '❌ Ceza', inline: true },
+                { name: 'Kesilen', value: fmtMoney(realPenalty), inline: true },
+                { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
+            );
+        return interaction.reply({ embeds: [loseEmbed] });
     }
 };

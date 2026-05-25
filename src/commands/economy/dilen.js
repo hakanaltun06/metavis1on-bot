@@ -26,7 +26,14 @@ module.exports = {
             return interaction.reply({ embeds: [createEmbed('error', '😢 Eli Boş Döndün', 'Kimse sana para vermedi.')] });
         }
 
+        const newWallet = Number(userData.wallet) + outcome.reward;
         await addMoney(interaction.user.id, outcome.reward, 'wallet');
-        await interaction.reply({ embeds: [createEmbed('reward', '🤲 Bağış', `Yoldan geçen biri acıdı ve sana ${fmtMoney(outcome.reward)} verdi.`)] });
+
+        const embed = createEmbed('reward', '🤲 Bağış', 'Yoldan geçen biri acıdı.')
+            .addFields(
+                { name: 'Gelen Para', value: fmtMoney(outcome.reward), inline: true },
+                { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
+            );
+        await interaction.reply({ embeds: [embed] });
     }
 };

@@ -21,10 +21,19 @@ module.exports = {
         }
 
         const { job, reward } = rollWorkReward();
+        const newWallet = Number(userData.wallet) + reward;
+        const newWorkCount = (userData.work_count || 0) + 1;
 
         await addMoney(interaction.user.id, reward, 'wallet');
         await pool.query('UPDATE economy_users SET last_work = CURRENT_TIMESTAMP, work_count = work_count + 1 WHERE user_id = $1', [interaction.user.id]);
 
-        await interaction.reply({ embeds: [createEmbed('reward', '💼 Mesai Tamam', `${job} ve ${fmtMoney(reward)} kazandın.`)] });
+        const embed = createEmbed('reward', '💼 Mesai Tamam', job)
+            .addFields(
+                { name: 'Kazanç', value: fmtMoney(reward), inline: true },
+                { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true },
+                { name: 'Toplam Mesai', value: `**${newWorkCount}** kez`, inline: true }
+            )
+            .setFooter({ text: 'Daha büyük kazançlar için banka ve kasa sistemini de kullanabilirsin.' });
+        await interaction.reply({ embeds: [embed] });
     }
 };

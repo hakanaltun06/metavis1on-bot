@@ -50,12 +50,12 @@ module.exports = {
                 if (outcome.win) {
                     await db.query('UPDATE economy_users SET wallet = wallet - $1, total_lost = total_lost + $1 WHERE user_id = $2', [outcome.stolen, target.id]);
                     await db.query('UPDATE economy_users SET wallet = wallet + $1, total_earned = total_earned + $1, rob_success = rob_success + 1 WHERE user_id = $2', [outcome.stolen, interaction.user.id]);
-                    return { kind: 'success', stolen: outcome.stolen };
+                    return { kind: 'success', stolen: outcome.stolen, newWallet: Number(userData.wallet) + outcome.stolen };
                 }
 
                 const penalty = computeRobPenalty(Number(userData.wallet));
                 await db.query('UPDATE economy_users SET wallet = wallet - $1, total_lost = total_lost + $1, rob_fail = rob_fail + 1 WHERE user_id = $2', [penalty, interaction.user.id]);
-                return { kind: 'caught', penalty };
+                return { kind: 'caught', penalty, newWallet: Number(userData.wallet) - penalty };
             });
 
             if (result.kind === 'cooldown') {
@@ -71,9 +71,20 @@ module.exports = {
                 return interaction.reply({ embeds: [createEmbed('info', '🛡️ Engellendi', `${target.username} kişisinde **Soygun Kalkanı** vardı. Kalkan kırıldı ama hedef güvende.`)] });
             }
             if (result.kind === 'success') {
-                return interaction.reply({ embeds: [createEmbed('success', '🥷 Soygun Başarılı', `${target.username} uyurken cüzdanına girdin.\nÇaldığın: ${fmtMoney(result.stolen)}`)] });
+                const successEmbed = createEmbed('success', '🥷 Soygun Başarılı', `${target.username} uyurken cüzdanına girdin.`)
+                    .addFields(
+                        { name: 'Hedef', value: target.username, inline: true },
+                        { name: 'Çalınan', value: fmtMoney(result.stolen), inline: true },
+                        { name: 'Yeni Cüzdanın', value: fmtMoney(result.newWallet), inline: true }
+                    );
+                return interaction.reply({ embeds: [successEmbed] });
             }
-            return interaction.reply({ embeds: [createEmbed('error', '🚔 Yakalandın', `Hedef uyandı. Kaçarken ${fmtMoney(result.penalty)} düşürdün.`)] });
+            const caughtEmbed = createEmbed('error', '🚔 Yakalandın', 'Hedef uyandı.')
+                .addFields(
+                    { name: 'Kaybedilen', value: fmtMoney(result.penalty), inline: true },
+                    { name: 'Yeni Cüzdanın', value: fmtMoney(result.newWallet), inline: true }
+                );
+            return interaction.reply({ embeds: [caughtEmbed] });
         } catch (err) {
             console.error('Soy hatası:', err && err.message ? err.message : err);
             return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });

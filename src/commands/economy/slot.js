@@ -26,10 +26,25 @@ module.exports = {
 
         if (spin.multiplier > 0) {
             const profit = Math.floor(amount * spin.multiplier) - amount;
+            const newWallet = Number(userData.wallet) + profit;
             await addMoney(interaction.user.id, profit, 'wallet');
-            return interaction.reply({ embeds: [createEmbed('premium', '🎰 Slot Makinesi', `\n> ${slotString}\n\n🎉 **Kazandın.** Çarpan: **${spin.multiplier}x**\nNet kâr: ${fmtMoney(profit)}`)] });
+            const winEmbed = createEmbed('premium', '🎰 Slot Makinesi', `\n> ${slotString}\n\n🎉 **Kazandın!**`)
+                .addFields(
+                    { name: 'Bahis', value: fmtMoney(amount), inline: true },
+                    { name: 'Çarpan', value: `**${spin.multiplier}x**`, inline: true },
+                    { name: 'Kazanç', value: fmtMoney(profit), inline: true },
+                    { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
+                );
+            return interaction.reply({ embeds: [winEmbed] });
         }
+        const newWallet = Number(userData.wallet) - amount;
         await removeMoney(interaction.user.id, amount, 'wallet');
-        return interaction.reply({ embeds: [createEmbed('error', '🎰 Slot Makinesi', `\n> ${slotString}\n\n💀 **Kaybettin.**\nGiden: ${fmtMoney(amount)}`)] });
+        const loseEmbed = createEmbed('error', '🎰 Slot Makinesi', `\n> ${slotString}\n\n💀 **Kaybettin.**`)
+            .addFields(
+                { name: 'Bahis', value: fmtMoney(amount), inline: true },
+                { name: 'Kayıp', value: fmtMoney(amount), inline: true },
+                { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
+            );
+        return interaction.reply({ embeds: [loseEmbed] });
     }
 };

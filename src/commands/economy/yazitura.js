@@ -27,13 +27,30 @@ module.exports = {
 
         await pool.query('UPDATE economy_users SET gamble_count = gamble_count + 1 WHERE user_id = $1', [interaction.user.id]);
 
-        const resultLabel = result === 'yazi' ? 'YAZI' : 'TURA';
+        const choiceLabel = choice === 'yazi' ? 'Yazı' : 'Tura';
+        const resultLabel = result === 'yazi' ? 'Yazı' : 'Tura';
 
         if (win) {
+            const newWallet = Number(userData.wallet) + amount;
             await addMoney(interaction.user.id, amount, 'wallet');
-            return interaction.reply({ embeds: [createEmbed('success', '🪙 Para Döndü', `Para **${resultLabel}** geldi. Doğru bildin.\nKazandığın: ${fmtMoney(amount)}`)] });
+            const winEmbed = createEmbed('success', '🪙 Para Döndü', `Para **${resultLabel}** geldi.`)
+                .addFields(
+                    { name: 'Seçimin', value: choiceLabel, inline: true },
+                    { name: 'Sonuç', value: `${resultLabel} ✅`, inline: true },
+                    { name: 'Kazanç', value: fmtMoney(amount), inline: true },
+                    { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
+                );
+            return interaction.reply({ embeds: [winEmbed] });
         }
+        const newWallet = Number(userData.wallet) - amount;
         await removeMoney(interaction.user.id, amount, 'wallet');
-        return interaction.reply({ embeds: [createEmbed('error', '🪙 Para Döndü', `Para **${resultLabel}** geldi. Yanlış bildin.\nKaybettiğin: ${fmtMoney(amount)}`)] });
+        const loseEmbed = createEmbed('error', '🪙 Para Döndü', `Para **${resultLabel}** geldi.`)
+            .addFields(
+                { name: 'Seçimin', value: choiceLabel, inline: true },
+                { name: 'Sonuç', value: `${resultLabel} ❌`, inline: true },
+                { name: 'Kayıp', value: fmtMoney(amount), inline: true },
+                { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
+            );
+        return interaction.reply({ embeds: [loseEmbed] });
     }
 };

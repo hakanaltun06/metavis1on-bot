@@ -33,12 +33,29 @@ module.exports = {
         await pool.query('UPDATE economy_users SET gamble_count = gamble_count + 1 WHERE user_id = $1', [interaction.user.id]);
 
         const win = Math.random() < finalChance;
+        const chanceText = `Kazanma şansın: %${(finalChance * 100).toFixed(0)}`;
         if (win) {
             const profit = Math.floor(amount * GAMBLE_WIN_MULTIPLIER) - amount;
+            const newWallet = Number(userData.wallet) + profit;
             await addMoney(interaction.user.id, profit, 'wallet');
-            return interaction.reply({ embeds: [createEmbed('success', '🎲 Kazandın', `Zarlar lehine geldi. ${fmtMoney(amount)} kâr ettin.`)] });
+            const winEmbed = createEmbed('success', '🎲 Kazandın', 'Zarlar lehine geldi.')
+                .addFields(
+                    { name: 'Bahis', value: fmtMoney(amount), inline: true },
+                    { name: 'Kazanç', value: fmtMoney(profit), inline: true },
+                    { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
+                )
+                .setFooter({ text: chanceText });
+            return interaction.reply({ embeds: [winEmbed] });
         }
+        const newWallet = Number(userData.wallet) - amount;
         await removeMoney(interaction.user.id, amount, 'wallet');
-        return interaction.reply({ embeds: [createEmbed('error', '🎲 Kaybettin', `Zar kötü düştü. ${fmtMoney(amount)} kaybettin.`)] });
+        const loseEmbed = createEmbed('error', '🎲 Kaybettin', 'Zar kötü düştü.')
+            .addFields(
+                { name: 'Bahis', value: fmtMoney(amount), inline: true },
+                { name: 'Kayıp', value: fmtMoney(amount), inline: true },
+                { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
+            )
+            .setFooter({ text: chanceText });
+        return interaction.reply({ embeds: [loseEmbed] });
     }
 };
