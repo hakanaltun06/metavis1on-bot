@@ -28,7 +28,18 @@ module.exports = {
                 await upgradeBankLevel(interaction.user.id, cost, nextDef.level, nextDef.limit, db);
                 await logTransaction(interaction.user.id, null, 'bank_upgrade', cost, `Banka seviye yükseltme → ${nextDef.level}`, db);
 
-                return { kind: 'ok', newLevel: nextDef.level, oldLimit, newLimit: nextDef.limit, cost };
+                const afterMax = isMaxLevel(nextDef.level);
+                const nextUpgradeDef = afterMax ? null : getNextLevelDef(nextDef.level);
+                return {
+                    kind: 'ok',
+                    oldLevel: level,
+                    newLevel: nextDef.level,
+                    oldLimit,
+                    newLimit: nextDef.limit,
+                    cost,
+                    newWallet: wallet - cost,
+                    nextUpgradeCost: nextUpgradeDef ? nextUpgradeDef.upgradeCost : null
+                };
             });
 
             if (result.kind === 'max') {
@@ -37,13 +48,16 @@ module.exports = {
             if (result.kind === 'poor') {
                 return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', `Bu yükseltme için cüzdanında ${fmtMoney(result.cost)} olmalı.`)], flags: MessageFlags.Ephemeral });
             }
-            const oldLevel = result.newLevel - 1;
-            const embed = createEmbed('bank', '🏦 Banka Yükseltildi', `Hesabın **${oldLevel}** → **${result.newLevel}** seviyesine çıktı.`)
+            const embed = createEmbed('bank', '🏦 Banka Yükseltildi', 'Banka kapasiten başarıyla artırıldı.')
                 .addFields(
-                    { name: 'Önceki Kapasite', value: fmtMoney(result.oldLimit), inline: true },
+                    { name: 'Seviye', value: `**${result.oldLevel}** → **${result.newLevel}**`, inline: true },
+                    { name: 'Eski Kapasite', value: fmtMoney(result.oldLimit), inline: true },
                     { name: 'Yeni Kapasite', value: fmtMoney(result.newLimit), inline: true },
-                    { name: 'Ödenen', value: fmtMoney(result.cost), inline: true }
-                );
+                    { name: 'Ödenen', value: fmtMoney(result.cost), inline: true },
+                    { name: 'Yeni Cüzdan', value: fmtMoney(result.newWallet), inline: true },
+                    { name: 'Sonraki Yükseltme', value: result.nextUpgradeCost ? fmtMoney(result.nextUpgradeCost) : 'Maksimum seviyedesin', inline: true }
+                )
+                .setFooter({ text: 'Daha yüksek kapasite, faiz kazancını daha rahat büyütür.' });
             return interaction.reply({ embeds: [embed] });
         } catch (err) {
             console.error('Banka yükseltme hatası:', err && err.message ? err.message : err);

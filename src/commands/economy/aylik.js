@@ -19,6 +19,14 @@ module.exports = {
         const reward = REWARDS.MONTHLY;
         await addMoney(interaction.user.id, reward, 'wallet');
         await pool.query('UPDATE economy_users SET last_monthly = CURRENT_TIMESTAMP WHERE user_id = $1', [interaction.user.id]);
-        await interaction.reply({ embeds: [createEmbed('reward', '🏆 Aylık Ödül', `${fmtMoney(reward)} cüzdanına eklendi. Keyfini çıkar.`)] });
+        const newWallet = Number(userData.wallet) + reward;
+        const embed = createEmbed('reward', '🏆 Aylık Ödül Alındı', 'Aylık MetaCoin ödülün cüzdanına eklendi.')
+            .addFields(
+                { name: 'Ödül', value: fmtMoney(reward), inline: true },
+                { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true },
+                { name: 'Sonraki Aylık', value: '30 gün sonra', inline: true }
+            )
+            .setFooter({ text: 'Aylık ödül büyük kazanç sağlar; cüzdanını ve bankanı dengeli kullan.' });
+        await interaction.reply({ embeds: [embed] });
     }
 };

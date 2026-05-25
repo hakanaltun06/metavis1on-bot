@@ -5,7 +5,7 @@ const { addMoney } = require('../../database/money');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { COOLDOWNS } = require('../../utils/constants');
-const { computeDailyReward } = require('../../services/rewardsService');
+const { computeDailyReward, REWARDS } = require('../../services/rewardsService');
 
 module.exports = {
     data: { name: 'gunluk', description: 'Günlük ödülünü alırsın ve serini korursun.' },
@@ -28,14 +28,27 @@ module.exports = {
         await addMoney(interaction.user.id, totalReward, 'wallet');
         await pool.query('UPDATE economy_users SET daily_streak = $1, last_daily = CURRENT_TIMESTAMP WHERE user_id = $2', [newStreak, interaction.user.id]);
 
-        const embed = createEmbed('reward', '🎁 Günlük Ödül', `Günün iyi geçsin. Cüzdanına para eklendi.`)
-            .addFields(
-                { name: 'Kazandığın', value: fmtMoney(totalReward), inline: true },
-                { name: 'Güncel Seri', value: `🔥 **${newStreak} gün** (+${streakBonus} bonus)`, inline: true }
-            );
-        if (diffDays > 1 && userData.daily_streak > 0) {
-            embed.setFooter({ text: 'Bir günden fazla beklediğin için serin sıfırlandı.' });
+        const newWallet = Number(userData.wallet) + totalReward;
+        const streakReset = diffDays > 1 && userData.daily_streak > 0;
+        const footerText = streakReset
+            ? 'Bir günden fazla beklediğin için serin sıfırlandı.'
+            : 'Serini korudukça günlük kazancın güçlenir.';
+
+        const fields = [
+            { name: 'Günlük Ödül', value: fmtMoney(REWARDS.DAILY_BASE), inline: true },
+            { name: 'Seri', value: `🔥 **${newStreak} gün**`, inline: true }
+        ];
+        if (streakBonus > 0) {
+            fields.push({ name: 'Seri Bonusu', value: fmtMoney(streakBonus), inline: true });
         }
+        fields.push(
+            { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true },
+            { name: 'Sonraki Günlük', value: '24 saat sonra', inline: true }
+        );
+
+        const embed = createEmbed('reward', '🎁 Günlük Ödül Alındı', 'Günlük MetaCoin ödülün cüzdanına eklendi.')
+            .addFields(...fields)
+            .setFooter({ text: footerText });
         await interaction.reply({ embeds: [embed] });
     }
 };
