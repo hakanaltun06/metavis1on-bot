@@ -3,6 +3,7 @@ const { pool } = require('../../database/pool');
 const { checkItem, consumeItem } = require('../../database/inventory');
 const { createEmbed } = require('../../utils/embeds');
 const { findItem } = require('../../services/shopService');
+const { isCrateItem } = require('../../services/crateService');
 
 module.exports = {
     data: {
@@ -12,6 +13,11 @@ module.exports = {
     },
     async execute(interaction) {
         const itemId = interaction.options.getString('esya').toLowerCase();
+
+        if (isCrateItem(itemId)) {
+            return interaction.reply({ embeds: [createEmbed('info', '📦 Kasa', 'Kasaları açmak için `/kasa-ac` komutunu kullan.')], flags: MessageFlags.Ephemeral });
+        }
+
         const hasQty = await checkItem(interaction.user.id, itemId);
 
         if (hasQty <= 0) return interaction.reply({ embeds: [createEmbed('error', '❌ Yok', 'Bu eşyaya sahip değilsin.')], flags: MessageFlags.Ephemeral });

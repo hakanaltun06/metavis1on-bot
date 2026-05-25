@@ -12,7 +12,9 @@ const {
     COLOR_INFLATION,
     COLOR_ADMIN,
     COLOR_RISK,
-    COLOR_REWARD
+    COLOR_REWARD,
+    COLOR_CRATE,
+    COLOR_COLLECTION
 } = require('./constants');
 
 const EMBED_COLORS = {
@@ -28,7 +30,9 @@ const EMBED_COLORS = {
     inflation: COLOR_INFLATION,
     admin:     COLOR_ADMIN,
     risk:      COLOR_RISK,
-    reward:    COLOR_REWARD
+    reward:    COLOR_REWARD,
+    crate:     COLOR_CRATE,
+    collection: COLOR_COLLECTION
 };
 
 function safeText(value, fallback = '—') {
@@ -84,6 +88,8 @@ function createSuccessEmbed(title, desc)   { return createEmbed('success', title
 function createErrorEmbed(title, desc)     { return createEmbed('error', title, desc); }
 function createWarningEmbed(title, desc)   { return createEmbed('warn', title, desc); }
 function createInfoEmbed(title, desc)      { return createEmbed('info', title, desc); }
+function createCrateEmbed(title, desc)     { return createEmbed('crate', title, desc); }
+function createCollectionEmbed(title, desc) { return createEmbed('collection', title, desc); }
 
 function genericErrorEmbed() {
     return createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Bu komut işlenirken bir sorun çıktı. Biraz sonra tekrar dener misin?');
@@ -103,6 +109,8 @@ module.exports = {
     createErrorEmbed,
     createWarningEmbed,
     createInfoEmbed,
+    createCrateEmbed,
+    createCollectionEmbed,
     genericErrorEmbed,
     safeField,
     addFieldsSafe,

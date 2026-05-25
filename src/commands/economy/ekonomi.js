@@ -37,6 +37,13 @@ module.exports = {
         const loanStats = await getServerLoanStats();
         const avgScore = await getAverageCreditScore();
 
+        let crateOpens = 0, crateCoins = 0;
+        try {
+            const cr = await pool.query('SELECT COUNT(*) as c, COALESCE(SUM(reward_amount), 0) as s FROM economy_crate_logs');
+            crateOpens = Number(cr.rows[0].c) || 0;
+            crateCoins = Number(cr.rows[0].s) || 0;
+        } catch (_) {}
+
         const embed = createEmbed('economy', '📊 Ekonomi Durumu')
             .addFields(
                 { name: 'Kayıtlı Kullanıcı', value: `**${data.users}** kişi`, inline: true },
@@ -49,6 +56,9 @@ module.exports = {
                 { name: 'Fiyat Etkisi', value: `**${effect}**`, inline: true },
                 { name: 'Kredi Durumu', value: `Aktif: **${loanStats.activeCount}** — Açık Borç: **${formatNumber(loanStats.activeDebt)}** ${CURRENCY_NAME}\nOrtalama Puan: **${avgScore.toFixed(0)}**`, inline: false }
             );
+        if (crateOpens > 0) {
+            embed.addFields({ name: '📦 Kasa Sistemi', value: `Açılan: **${formatNumber(crateOpens)}** kasa\nDağıtılan: **${formatNumber(crateCoins)}** ${CURRENCY_NAME}`, inline: true });
+        }
         await interaction.reply({ embeds: [embed] });
     }
 };

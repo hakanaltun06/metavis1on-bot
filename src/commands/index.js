@@ -30,7 +30,10 @@ const economyModules = [
     require('./economy/ekonomi'),
     require('./economy/bekleme'),
     require('./economy/enflasyon'),
-    require('./economy/kredi')
+    require('./economy/kredi'),
+    require('./economy/kasa'),
+    require('./economy/kasaAc'),
+    require('./economy/sat')
 ];
 
 const adminModules = [

@@ -73,6 +73,16 @@ async function initDB() {
             CREATE INDEX IF NOT EXISTS idx_loans_user_id ON economy_loans(user_id);
             CREATE INDEX IF NOT EXISTS idx_loans_status  ON economy_loans(status);
             CREATE INDEX IF NOT EXISTS idx_loans_due_at  ON economy_loans(due_at);
+
+            CREATE TABLE IF NOT EXISTS economy_crate_logs (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                crate_code TEXT NOT NULL,
+                reward_type TEXT NOT NULL,
+                reward_code TEXT,
+                reward_amount BIGINT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         `);
         console.log('✅ Veritabanı tabloları hazır.');
     } finally {

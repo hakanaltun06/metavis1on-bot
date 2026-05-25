@@ -29,4 +29,16 @@ async function getInventoryTotal(userId, db = pool) {
     return Number(res.rows[0].total_items) || 0;
 }
 
-module.exports = { checkItem, addItem, consumeItem, getInventory, getInventoryTotal };
+async function safeConsumeItem(userId, itemId, amount = 1, db = pool) {
+    const res = await db.query(
+        'UPDATE economy_inventory SET quantity = quantity - $1 WHERE user_id = $2 AND item_id = $3 AND quantity >= $1 RETURNING quantity',
+        [amount, userId, itemId]
+    );
+    if (res.rowCount === 0) return false;
+    if (res.rows[0].quantity <= 0) {
+        await db.query('DELETE FROM economy_inventory WHERE user_id = $1 AND item_id = $2 AND quantity <= 0', [userId, itemId]);
+    }
+    return true;
+}
+
+module.exports = { checkItem, addItem, consumeItem, safeConsumeItem, getInventory, getInventoryTotal };

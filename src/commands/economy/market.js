@@ -8,6 +8,7 @@ const {
     getPriceTrend,
     getDynamicPrice
 } = require('../../services/economyService');
+const { getCrateTypes, calculateCrateDynamicPrice } = require('../../services/crateService');
 
 module.exports = {
     data: { name: 'market', description: 'Market eşyalarını ve güncel fiyatları gösterir.' },
@@ -33,7 +34,22 @@ module.exports = {
             });
         });
 
-        embed.setFooter({ text: 'Eşya almak için /satinal <kod> kullan.' });
+        embed.addFields({ name: '​', value: '**📦 Kasalar**', inline: false });
+        getCrateTypes().forEach(crate => {
+            const dynamic = calculateCrateDynamicPrice(crate, index);
+            const base = crate.basePrice;
+            const samePrice = dynamic === base;
+            const priceLine = samePrice
+                ? `${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY}`
+                : `${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY} *(temel ${formatFull(base)})*`;
+            embed.addFields({
+                name: `${crate.name} — ${priceLine}`,
+                value: `Kod: \`${crate.code}\`\n*${crate.desc}*`,
+                inline: false
+            });
+        });
+
+        embed.setFooter({ text: 'Eşya veya kasa almak için /satinal <kod> kullan.' });
         await interaction.reply({ embeds: [embed] });
     }
 };

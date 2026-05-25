@@ -18,6 +18,8 @@ const COLOR_INFLATION = "#E67E22"; // turuncu — piyasa/enflasyon
 const COLOR_ADMIN     = "#34495E"; // koyu gri — yönetici
 const COLOR_RISK      = "#C0392B"; // koyu kırmızı — risk/kumar
 const COLOR_REWARD    = "#27AE60"; // yeşil — ödül
+const COLOR_CRATE      = "#8E44AD"; // koyu mor — kasa
+const COLOR_COLLECTION = "#E056A0"; // gül — koleksiyon
 
 // Banka seviyeleri
 const BANK_LEVELS = [
@@ -81,6 +83,8 @@ module.exports = {
     COLOR_ADMIN,
     COLOR_RISK,
     COLOR_REWARD,
+    COLOR_CRATE,
+    COLOR_COLLECTION,
     BANK_LEVELS,
     INTEREST_INTERVAL_MS,
     INTEREST_RATE,
