@@ -253,9 +253,37 @@ async function startSeason(name, durationDays = 30, db = pool) {
             return { ok: false, reason: 'active_season_exists', season: existing };
         }
 
-        const countRes = await db.query('SELECT COUNT(*) FROM economy_seasons');
-        const num = Number(countRes.rows[0].count) + 1;
-        const finalName = (name && String(name).trim()) || `Sezon ${num}`;
+        const trimmedName = name && String(name).trim() ? String(name).trim() : null;
+
+        // Sezon adı benzersizlik kontrolü (büyük/küçük harf duyarsız)
+        if (trimmedName) {
+            const nameCheck = await db.query(
+                'SELECT * FROM economy_seasons WHERE LOWER(name) = LOWER($1) LIMIT 1',
+                [trimmedName]
+            );
+            if (nameCheck.rows[0]) {
+                return { ok: false, reason: 'season_name_exists', existingSeason: nameCheck.rows[0] };
+            }
+        }
+
+        // Otomatik benzersiz ad üretimi
+        let finalName;
+        if (trimmedName) {
+            finalName = trimmedName;
+        } else {
+            const countRes = await db.query('SELECT COUNT(*) FROM economy_seasons');
+            let num = Number(countRes.rows[0].count) + 1;
+            while (true) {
+                const candidate = `Sezon ${num}`;
+                const nameCheck = await db.query(
+                    'SELECT id FROM economy_seasons WHERE LOWER(name) = LOWER($1) LIMIT 1',
+                    [candidate]
+                );
+                if (!nameCheck.rows[0]) break;
+                num++;
+            }
+            finalName = `Sezon ${num}`;
+        }
 
         const endsAt = new Date(Date.now() + safeDays * 86400000);
         const res = await db.query(
@@ -315,6 +343,57 @@ async function getSeasonTopUser(seasonId, db = pool) {
     } catch (err) {
         console.error('Sezon lider kullanıcı hatası:', err && err.message ? err.message : err);
         return null;
+    }
+}
+
+// ================== [ TAMAMLANAN SEZONLAR ] ==================
+async function getCompletedSeasons(limit = 10, db = pool) {
+    try {
+        const safeLimit = Math.max(1, Math.min(20, Math.floor(Number(limit) || 10)));
+        const res = await db.query(`
+            SELECT * FROM economy_seasons
+            WHERE status = 'completed'
+            ORDER BY id DESC
+            LIMIT $1
+        `, [safeLimit]);
+        return res.rows;
+    } catch (err) {
+        console.error('Tamamlanmış sezonlar hatası:', err && err.message ? err.message : err);
+        return [];
+    }
+}
+
+// ================== [ ÖDÜL DAĞITIM DURUMU ] ==================
+async function isSeasonRewardsDistributed(seasonId, db = pool) {
+    try {
+        const res = await db.query(
+            'SELECT COUNT(*) FROM economy_season_users WHERE season_id = $1 AND rewards_claimed = true',
+            [seasonId]
+        );
+        return Number(res.rows[0].count) > 0;
+    } catch (err) {
+        console.error('Ödül dağıtım durum hatası:', err && err.message ? err.message : err);
+        return false;
+    }
+}
+
+// ================== [ SEZON GEÇMİŞİ ] ==================
+async function getSeasonHistory(limit = 10, db = pool) {
+    try {
+        const seasons = await getCompletedSeasons(limit, db);
+        const result = [];
+        for (const season of seasons) {
+            const [userCount, topUser, rewardsDistributed] = await Promise.all([
+                getSeasonUserCount(season.id, db),
+                getSeasonTopUser(season.id, db),
+                isSeasonRewardsDistributed(season.id, db)
+            ]);
+            result.push({ season, userCount, topUser, rewardsDistributed });
+        }
+        return result;
+    } catch (err) {
+        console.error('Sezon geçmişi hatası:', err && err.message ? err.message : err);
+        return [];
     }
 }
 
@@ -435,5 +514,8 @@ module.exports = {
     getLatestCompletedSeason,
     getSeasonRewardCandidates,
     buildSeasonRewardPlan,
-    distributeSeasonRewards
+    distributeSeasonRewards,
+    getCompletedSeasons,
+    isSeasonRewardsDistributed,
+    getSeasonHistory
 };

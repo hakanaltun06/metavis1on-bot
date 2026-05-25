@@ -9,7 +9,8 @@ const {
     getSeasonUserCount,
     getSeasonTopUser,
     getLatestCompletedSeason,
-    distributeSeasonRewards
+    distributeSeasonRewards,
+    isSeasonRewardsDistributed
 } = require('../../services/seasonService');
 
 function formatSeasonDate(date) {
@@ -92,7 +93,30 @@ async function handleDurum(interaction) {
     const season = await getCurrentSeason();
 
     if (!season) {
+        const lastSeason = await getLatestCompletedSeason();
+        if (!lastSeason) {
+            const embed = createEmbed('info', '🏆 Sezon Durumu', 'Şu anda aktif sezon bulunmuyor.')
+                .setFooter({ text: '/sezon-yonet baslat ile yeni sezon başlatabilirsin.' });
+            return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+        }
+
+        const [lastUserCount, lastTopUser, lastRewardsDistributed] = await Promise.all([
+            getSeasonUserCount(lastSeason.id),
+            getSeasonTopUser(lastSeason.id),
+            isSeasonRewardsDistributed(lastSeason.id)
+        ]);
+
+        const lastLeaderText = lastTopUser
+            ? `<@${lastTopUser.user_id}> — **${formatNumber(Number(lastTopUser.points))}** puan · Seviye **${lastTopUser.season_level}**`
+            : 'Katılımcı yok.';
+
         const embed = createEmbed('info', '🏆 Sezon Durumu', 'Şu anda aktif sezon bulunmuyor.')
+            .addFields(
+                { name: '📋 Son Sezon',    value: lastSeason.name,                                          inline: true },
+                { name: '🏅 Ödül',         value: lastRewardsDistributed ? '✅ Dağıtıldı' : '⏳ Bekliyor', inline: true },
+                { name: '👥 Katılımcı',    value: `**${lastUserCount}** kullanıcı`,                          inline: true },
+                { name: '🥇 Lider',        value: lastLeaderText,                                            inline: false }
+            )
             .setFooter({ text: '/sezon-yonet baslat ile yeni sezon başlatabilirsin.' });
         return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     }
@@ -134,6 +158,14 @@ async function handleBaslat(interaction) {
             )
             .setFooter({ text: 'Önce mevcut sezonu /sezon-yonet bitir ile tamamla.' });
         return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    }
+
+    if (!result.ok && result.reason === 'season_name_exists') {
+        return interaction.reply({
+            embeds: [createEmbed('warn', '⚠️ Sezon Adı Kullanılmış',
+                'Bu sezon adı daha önce kullanılmış.\nLütfen farklı bir sezon adı seç.')],
+            flags: MessageFlags.Ephemeral
+        });
     }
 
     if (!result.ok) {

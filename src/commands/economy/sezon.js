@@ -32,7 +32,7 @@ module.exports = {
 
             if (!season) {
                 const embed = createEmbed('info', '🏆 Sezon Sistemi',
-                    'Şu anda aktif bir sezon bulunmuyor.\n\nYeni sezon başladığında burada sezon puanın, seviyen ve sıralaman görünecek.')
+                    'Şu anda aktif bir sezon bulunmuyor.\n\nYeni sezon başladığında burada sezon puanın, seviyen ve sıralaman görünecek.\n\nGeçmiş sezonları görmek için **/sezon-gecmis** komutunu kullanabilirsin.')
                     .setFooter({ text: 'Sezonlar bot sahibi tarafından başlatılır.' });
                 return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
             }

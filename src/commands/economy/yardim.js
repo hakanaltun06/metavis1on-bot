@@ -47,6 +47,11 @@ module.exports = {
                     inline: false
                 },
                 {
+                    name: '🏆 Sezon',
+                    value: '`/sezon` — Sezon puanın, seviyeni ve sıralamana bak\n`/sezon-siralama` — Sezon liderlik tablosu\n`/sezon-oduller` — Sezon ödül kademeleri\n`/sezon-gecmis` — Geçmiş tamamlanmış sezonlar',
+                    inline: false
+                },
+                {
                     name: '📊 Bilgi & İstatistik',
                     value: '`/profil` — Ekonomi profilini görüntüle\n`/siralama` — Sunucu zenginlik sıralaması\n`/seri` — Günlük seri sıralaması\n`/ekonomi` — Sunucu geneli para istatistikleri\n`/enflasyon` — Piyasa fiyat endeksi ve yorum\n`/bekleme` — Aktif bekleme sürelerini gör',
                     inline: false
@@ -57,7 +62,7 @@ module.exports = {
         if (isBotOwner(interaction.user.id)) {
             embed.addFields({
                 name: '⚙️ Yönetici',
-                value: '`/para-ekle` — Kullanıcıya MetaCoin ekle\n`/para-sil` — Kullanıcıdan MetaCoin çıkar\n`/ekonomi-sifirla` — Kullanıcı ekonomisini sıfırla',
+                value: '`/para-ekle` — Kullanıcıya MetaCoin ekle\n`/para-sil` — Kullanıcıdan MetaCoin çıkar\n`/ekonomi-sifirla` — Kullanıcı ekonomisini sıfırla\n`/sezon-yonet` — Sezon yönet (**durum** · **baslat** · **bitir** · **dagit**)',
                 inline: false
             });
         }
