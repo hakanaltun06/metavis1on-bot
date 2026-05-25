@@ -1,4 +1,6 @@
 const { pool } = require('../database/pool');
+const { withTx } = require('../database/tx');
+const { addItem } = require('../database/inventory');
 
 // ================== [ SEZON SEVİYE EŞİKLERİ ] ==================
 const SEASON_LEVELS = [
@@ -316,6 +318,106 @@ async function getSeasonTopUser(seasonId, db = pool) {
     }
 }
 
+// ================== [ SON TAMAMLANAN SEZON ] ==================
+async function getLatestCompletedSeason(db = pool) {
+    try {
+        const res = await db.query(`
+            SELECT * FROM economy_seasons
+            WHERE status = 'completed'
+            ORDER BY id DESC LIMIT 1
+        `);
+        return res.rows[0] || null;
+    } catch (err) {
+        console.error('Son tamamlanmış sezon hatası:', err && err.message ? err.message : err);
+        return null;
+    }
+}
+
+// ================== [ ÖDÜL ADAYLARI ] ==================
+async function getSeasonRewardCandidates(seasonId, db = pool) {
+    try {
+        const res = await db.query(`
+            SELECT user_id, points, season_level, rewards_claimed,
+                   RANK() OVER (ORDER BY points DESC) AS rank
+            FROM economy_season_users
+            WHERE season_id = $1 AND points > 0
+            ORDER BY points DESC
+        `, [seasonId]);
+        return res.rows;
+    } catch (err) {
+        console.error('Sezon ödül adayları hatası:', err && err.message ? err.message : err);
+        return [];
+    }
+}
+
+// ================== [ ÖDÜL PLANI ] ==================
+function buildSeasonRewardPlan(users) {
+    const plan = [];
+    for (const user of users) {
+        const rank = Number(user.rank);
+        const level = Number(user.season_level);
+        let tier = null;
+        let rewards = [];
+        if (rank === 1) {
+            tier = '1. sıra';
+            rewards = [{ itemId: 'efsanevi_kasa', quantity: 3 }];
+        } else if (rank === 2) {
+            tier = '2. sıra';
+            rewards = [{ itemId: 'efsanevi_kasa', quantity: 2 }];
+        } else if (rank === 3) {
+            tier = '3. sıra';
+            rewards = [{ itemId: 'efsanevi_kasa', quantity: 1 }];
+        } else if (rank >= 4 && rank <= 10) {
+            tier = '4-10. sıra';
+            rewards = [{ itemId: 'epik_kasa', quantity: 2 }];
+        } else if (level >= 3) {
+            tier = 'Seviye 3+';
+            rewards = [{ itemId: 'nadir_kasa', quantity: 1 }];
+        } else if (level === 2) {
+            tier = 'Seviye 2';
+            rewards = [{ itemId: 'basit_kasa', quantity: 1 }];
+        }
+        if (rewards.length > 0) {
+            plan.push({ userId: user.user_id, rank, points: Number(user.points), level, tier, rewards });
+        }
+    }
+    return plan;
+}
+
+// ================== [ ÖDÜL DAĞITIMI ] ==================
+async function distributeSeasonRewards(seasonId, db = pool) {
+    try {
+        const seasonRes = await db.query('SELECT * FROM economy_seasons WHERE id = $1', [seasonId]);
+        const season = seasonRes.rows[0];
+        if (!season) return { ok: false, reason: 'no_completed_season' };
+        if (season.status !== 'completed') return { ok: false, reason: 'season_not_completed' };
+
+        const candidates = await getSeasonRewardCandidates(seasonId, db);
+        if (!candidates.length) return { ok: false, reason: 'no_candidates' };
+        if (candidates.some(c => c.rewards_claimed)) return { ok: false, reason: 'already_distributed' };
+
+        const plan = buildSeasonRewardPlan(candidates);
+        if (!plan.length) return { ok: false, reason: 'no_candidates' };
+
+        await withTx(async (client) => {
+            for (const entry of plan) {
+                for (const reward of entry.rewards) {
+                    await addItem(entry.userId, reward.itemId, reward.quantity, client);
+                }
+                await client.query(
+                    'UPDATE economy_season_users SET rewards_claimed = true WHERE season_id = $1 AND user_id = $2',
+                    [seasonId, entry.userId]
+                );
+            }
+        });
+
+        return { ok: true, distributedCount: plan.length, rewards: plan };
+    } catch (err) {
+        console.error('Sezon ödül dağıtım hatası:', err && err.message ? err.message : err);
+        return { ok: false, reason: 'database_error' };
+    }
+}
+
 module.exports = {
     SEASON_LEVELS,
     calculateSeasonLevel,
@@ -329,5 +431,9 @@ module.exports = {
     startSeason,
     completeCurrentSeason,
     getSeasonUserCount,
-    getSeasonTopUser
+    getSeasonTopUser,
+    getLatestCompletedSeason,
+    getSeasonRewardCandidates,
+    buildSeasonRewardPlan,
+    distributeSeasonRewards
 };

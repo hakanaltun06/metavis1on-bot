@@ -17,22 +17,22 @@ function getRemainingText(endsAt) {
 const REWARD_TIERS = [
     {
         name: '🥇 1. Sıra',
-        value: '3× Efsanevi Kasa\nÖzel sezon rozeti\nÖzel sezon koleksiyon eşyası',
+        value: '3× Efsanevi Kasa',
         inline: false
     },
     {
         name: '🥈 2. Sıra',
-        value: '2× Efsanevi Kasa\nÖzel sezon rozeti\nÖzel sezon koleksiyon eşyası',
+        value: '2× Efsanevi Kasa',
         inline: false
     },
     {
         name: '🥉 3. Sıra',
-        value: '1× Efsanevi Kasa\nÖzel sezon koleksiyon eşyası',
+        value: '1× Efsanevi Kasa',
         inline: false
     },
     {
         name: '🏅 4.–10. Sıra',
-        value: '2× Epik Kasa\nSezon katılım rozeti',
+        value: '2× Epik Kasa',
         inline: false
     },
     {

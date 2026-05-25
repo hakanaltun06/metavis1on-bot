@@ -7,7 +7,9 @@ const {
     startSeason,
     completeCurrentSeason,
     getSeasonUserCount,
-    getSeasonTopUser
+    getSeasonTopUser,
+    getLatestCompletedSeason,
+    distributeSeasonRewards
 } = require('../../services/seasonService');
 
 function formatSeasonDate(date) {
@@ -57,6 +59,11 @@ module.exports = {
                 name: 'bitir',
                 description: 'Aktif sezonu tamamlar. Ödül dağıtımı yapılmaz.',
                 type: 1
+            },
+            {
+                name: 'dagit',
+                description: 'Tamamlanan son sezonun ödüllerini dağıtır.',
+                type: 1
             }
         ]
     },
@@ -70,6 +77,7 @@ module.exports = {
             if (sub === 'durum')  return await handleDurum(interaction);
             if (sub === 'baslat') return await handleBaslat(interaction);
             if (sub === 'bitir')  return await handleBitir(interaction);
+            if (sub === 'dagit')  return await handleDagit(interaction);
         } catch (err) {
             console.error('Sezon yonet hatası:', err && err.message ? err.message : err);
             return interaction.reply({
@@ -170,5 +178,63 @@ async function handleBitir(interaction) {
             { name: 'Durum',  value: 'Tamamlandı',  inline: true }
         )
         .setFooter({ text: 'Sezon tamamlandı. Ödül dağıtımı bu aşamada yapılmadı.' });
+    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
+
+function formatItemName(itemId) {
+    const names = {
+        efsanevi_kasa: 'Efsanevi Kasa',
+        epik_kasa:     'Epik Kasa',
+        nadir_kasa:    'Nadir Kasa',
+        basit_kasa:    'Basit Kasa'
+    };
+    return names[itemId] || itemId;
+}
+
+async function handleDagit(interaction) {
+    const season = await getLatestCompletedSeason();
+
+    if (!season) {
+        return interaction.reply({
+            embeds: [createEmbed('info', '🎖️ Ödül Dağıtımı', 'Tamamlanmış sezon bulunamadı.')],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const result = await distributeSeasonRewards(season.id);
+
+    if (!result.ok && result.reason === 'already_distributed') {
+        return interaction.reply({
+            embeds: [createEmbed('warn', '⚠️ Zaten Dağıtıldı', `**${season.name}** için ödüller daha önce dağıtıldı.`)],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    if (!result.ok && result.reason === 'no_candidates') {
+        return interaction.reply({
+            embeds: [createEmbed('info', '🎖️ Ödül Dağıtımı', `**${season.name}** için ödül alan kullanıcı bulunamadı.`)],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    if (!result.ok) {
+        return interaction.reply({
+            embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Ödüller dağıtılamadı. Biraz sonra tekrar dener misin?')],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const lines = result.rewards.slice(0, 15).map(entry => {
+        const rewardStr = entry.rewards.map(r => `${r.quantity}× ${formatItemName(r.itemId)}`).join(', ');
+        return `<@${entry.userId}> — ${entry.tier} → ${rewardStr}`;
+    });
+    if (result.distributedCount > 15) {
+        lines.push(`... ve ${result.distributedCount - 15} kişi daha`);
+    }
+
+    const embed = createEmbed('success', '🎖️ Ödüller Dağıtıldı', `**${season.name}** için ödüller başarıyla verildi.`)
+        .addFields({ name: `🏅 ${result.distributedCount} Kullanıcı`, value: lines.join('\n') || '—', inline: false })
+        .setFooter({ text: `Sezon ID: ${season.id}` });
+
     return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
