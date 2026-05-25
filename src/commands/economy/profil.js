@@ -44,7 +44,7 @@ module.exports = {
         const loanSummary = isSelf ? await getLoanSummary(target.id) : { activeCount: 0, activeDebt: 0 };
         const krediBlok = isSelf
             ? (loanSummary.activeCount > 0
-                ? `Puan: **${creditScore}**\nAktif: **${loanSummary.activeCount}** kredi\nAçık Borç: **${formatNumber(loanSummary.activeDebt)}**`
+                ? `Puan: **${creditScore}**\nAktif: **${loanSummary.activeCount}** kredi\nAçık Borç: **${formatNumber(loanSummary.activeDebt)}** ${CURRENCY_NAME} ${CURRENCY}`
                 : `Puan: **${creditScore}**\nAçık borç yok`)
             : `Puan: **${creditScore}**`;
 
@@ -74,12 +74,12 @@ module.exports = {
         const embed = createEmbed('premium', `${titlePrefix}${target.username}`)
             .setThumbnail(target.displayAvatarURL({ dynamic: true, size: 512 }))
             .addFields(
-                { name: '💰 Servet', value: `Cüzdan: **${formatNumber(wallet)}**\nBanka: **${formatNumber(bank)}** / **${formatNumber(limit)}** (%${fillPct})\nToplam: **${formatNumber(totalWealth)}** ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
+                { name: '💰 Servet', value: `Cüzdan: **${formatNumber(wallet)}** ${CURRENCY_NAME} ${CURRENCY}\nBanka: **${formatNumber(bank)}** / **${formatNumber(limit)}** ${CURRENCY_NAME} ${CURRENCY} (%${fillPct})\nToplam: **${formatNumber(totalWealth)}** ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: '🏦 Banka Hesabı', value: `Seviye: **${level}**\nFaizden Kazanılan: **${formatNumber(totalInterest)}**`, inline: true },
                 { name: '💳 Kredi', value: krediBlok, inline: true },
                 { name: '🔥 Aktiflik', value: `Günlük Seri: **${userData.daily_streak}**\nMesai: **${userData.work_count} kez**`, inline: true },
                 { name: '🎒 Envanter', value: envanterParts.join('\n'), inline: true },
-                { name: '📈 Para Akışı', value: `Kazanılan: **${formatNumber(userData.total_earned)}**\nKaybedilen: **${formatNumber(userData.total_lost)}**`, inline: true },
+                { name: '📈 Para Akışı', value: `Kazanılan: **${formatNumber(userData.total_earned)}** ${CURRENCY_NAME} ${CURRENCY}\nKaybedilen: **${formatNumber(userData.total_lost)}** ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: '🥷 Suç ve Kumar', value: `Soygun: **${userData.rob_success} başarı / ${userData.rob_fail} başarısız**\nKumar: **${userData.gamble_count} el**`, inline: true }
             )
             .setFooter({ text: `Hesap açılışı: ${formatDate(userData.created_at)}` });
