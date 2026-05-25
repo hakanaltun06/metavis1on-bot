@@ -7,6 +7,7 @@ const {
     getEconomyMood,
     formatPriceEffect
 } = require('../../services/economyService');
+const { getServerLoanStats, getAverageCreditScore } = require('../../database/loans');
 
 module.exports = {
     data: { name: 'ekonomi', description: 'Sunucunun genel ekonomi durumunu gösterir.' },
@@ -33,6 +34,9 @@ module.exports = {
         const mood = getEconomyMood(index);
         const effect = formatPriceEffect(index);
 
+        const loanStats = await getServerLoanStats();
+        const avgScore = await getAverageCreditScore();
+
         const embed = createEmbed('info', '📊 Ekonomi Durumu')
             .addFields(
                 { name: 'Kayıtlı Kullanıcı', value: `**${data.users}** kişi`, inline: true },
@@ -42,7 +46,8 @@ module.exports = {
                 { name: 'Toplam Faiz Kazancı', value: `${formatNumber(tInt)} ${CURRENCY_NAME}`, inline: true },
                 { name: 'Banka Seviyesi', value: `Ortalama **${avgLvl.toFixed(2)}** — En yüksek **${maxLvl}**`, inline: true },
                 { name: 'Piyasa Durumu', value: `**${mood}**`, inline: true },
-                { name: 'Fiyat Etkisi', value: `**${effect}**`, inline: true }
+                { name: 'Fiyat Etkisi', value: `**${effect}**`, inline: true },
+                { name: 'Kredi Durumu', value: `Aktif: **${loanStats.activeCount}** — Açık Borç: **${formatNumber(loanStats.activeDebt)}** ${CURRENCY_NAME}\nOrtalama Puan: **${avgScore.toFixed(0)}**`, inline: false }
             );
         await interaction.reply({ embeds: [embed] });
     }

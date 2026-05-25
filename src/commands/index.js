@@ -29,7 +29,8 @@ const economyModules = [
     require('./economy/seri'),
     require('./economy/ekonomi'),
     require('./economy/bekleme'),
-    require('./economy/enflasyon')
+    require('./economy/enflasyon'),
+    require('./economy/kredi')
 ];
 
 const adminModules = [
