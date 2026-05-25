@@ -5,6 +5,7 @@ const { addMoney, removeMoney } = require('../../database/money');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { SLOT_MIN_BET, rollSlot } = require('../../services/gamblingService');
+const { grantCappedPoints } = require('../../services/seasonService');
 
 module.exports = {
     data: {
@@ -24,6 +25,13 @@ module.exports = {
 
         await pool.query('UPDATE economy_users SET gamble_count = gamble_count + 1 WHERE user_id = $1', [interaction.user.id]);
 
+        let seasonGrant = null;
+        try {
+            seasonGrant = await grantCappedPoints(interaction.user.id, 'gambling', 3, 20);
+        } catch (err) {
+            console.error('Sezon puanı eklenemedi (slot):', err?.message);
+        }
+
         if (spin.multiplier > 0) {
             const profit = Math.floor(amount * spin.multiplier) - amount;
             const newWallet = Number(userData.wallet) + profit;
@@ -36,6 +44,9 @@ module.exports = {
                     { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
                 )
                 .setFooter({ text: 'Daha fazla denemeden önce bakiyeni kontrol etmeyi unutma.' });
+            if (seasonGrant && seasonGrant.granted > 0) {
+                winEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            }
             return interaction.reply({ embeds: [winEmbed] });
         }
         const newWallet = Number(userData.wallet) - amount;
@@ -47,6 +58,9 @@ module.exports = {
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
             )
             .setFooter({ text: 'Daha fazla denemeden önce bakiyeni kontrol etmeyi unutma.' });
+        if (seasonGrant && seasonGrant.granted > 0) {
+            loseEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+        }
         return interaction.reply({ embeds: [loseEmbed] });
     }
 };

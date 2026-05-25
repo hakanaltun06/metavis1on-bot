@@ -7,6 +7,7 @@ const { fmtMoney } = require('../../utils/format');
 const { getMins } = require('../../utils/time');
 const { COOLDOWNS } = require('../../utils/constants');
 const { rollBegResult } = require('../../services/rewardsService');
+const { grantCappedPoints } = require('../../services/seasonService');
 
 module.exports = {
     data: { name: 'dilen', description: 'Sokakta dilenirsin. Bazen işe yarar.' },
@@ -29,11 +30,21 @@ module.exports = {
         const newWallet = Number(userData.wallet) + outcome.reward;
         await addMoney(interaction.user.id, outcome.reward, 'wallet');
 
+        let seasonGrant = null;
+        try {
+            seasonGrant = await grantCappedPoints(interaction.user.id, 'beg', 2, 15);
+        } catch (err) {
+            console.error('Sezon puanı eklenemedi (dilen):', err?.message);
+        }
+
         const embed = createEmbed('reward', '🤲 Bağış', 'Yoldan geçen biri acıdı.')
             .addFields(
                 { name: 'Gelen Para', value: fmtMoney(outcome.reward), inline: true },
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
             );
+        if (seasonGrant && seasonGrant.granted > 0) {
+            embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+        }
         await interaction.reply({ embeds: [embed] });
     }
 };
