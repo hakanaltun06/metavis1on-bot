@@ -34,6 +34,7 @@ const economyModules = [
     require('./economy/kasa'),
     require('./economy/kasaAc'),
     require('./economy/sat'),
+    require('./economy/sezon'),
     require('./economy/yardim')
 ];
 
