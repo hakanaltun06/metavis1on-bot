@@ -33,7 +33,8 @@ const economyModules = [
     require('./economy/kredi'),
     require('./economy/kasa'),
     require('./economy/kasaAc'),
-    require('./economy/sat')
+    require('./economy/sat'),
+    require('./economy/yardim')
 ];
 
 const adminModules = [
