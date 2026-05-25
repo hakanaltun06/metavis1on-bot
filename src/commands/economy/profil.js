@@ -8,6 +8,7 @@ const { BANK_LEVELS, CURRENCY, CURRENCY_NAME } = require('../../utils/constants'
 const { calculateFillPct } = require('../../services/bankService');
 const { refreshUserLoans } = require('../../services/loanRefresh');
 const { isCrateItem, isRareItem, getRareItemByCode } = require('../../services/crateService');
+const { getCurrentSeason, getUserSeasonData, getUserSeasonRank } = require('../../services/seasonService');
 
 module.exports = {
     data: {
@@ -42,6 +43,25 @@ module.exports = {
         const titlePrefix = hasVip ? '💎 VIP Profil — ' : '👤 Profil — ';
 
         const loanSummary = isSelf ? await getLoanSummary(target.id) : { activeCount: 0, activeDebt: 0 };
+
+        let seasonField = null;
+        try {
+            const activeSeason = await getCurrentSeason();
+            if (activeSeason) {
+                const [{ user: sUser }, sRank] = await Promise.all([
+                    getUserSeasonData(target.id),
+                    getUserSeasonRank(target.id)
+                ]);
+                const sPoints   = sUser ? Number(sUser.points)        : 0;
+                const sLevel    = sUser ? Number(sUser.season_level)   : 1;
+                const sRankText = sRank != null ? `#${sRank}` : 'Henüz yok';
+                seasonField = {
+                    name: '🏆 Sezon',
+                    value: `Puan: **${formatNumber(sPoints)}**\nSeviye: **${sLevel}**\nSıra: **${sRankText}**`,
+                    inline: true
+                };
+            }
+        } catch (_) {}
         const krediBlok = isSelf
             ? (loanSummary.activeCount > 0
                 ? `Puan: **${creditScore}**\nAktif: **${loanSummary.activeCount}** kredi\nAçık Borç: **${formatNumber(loanSummary.activeDebt)}** ${CURRENCY_NAME} ${CURRENCY}`
@@ -83,6 +103,8 @@ module.exports = {
                 { name: '🥷 Suç ve Kumar', value: `Soygun: **${userData.rob_success} başarı / ${userData.rob_fail} başarısız**\nKumar: **${userData.gamble_count} el**`, inline: true }
             )
             .setFooter({ text: `Hesap açılışı: ${formatDate(userData.created_at)}` });
+
+        if (seasonField) embed.addFields(seasonField);
 
         await interaction.reply({ embeds: [embed] });
     }

@@ -9,7 +9,8 @@ module.exports = {
     },
 
     async execute(interaction) {
-        const embed = createEmbed('premium', '📖 MetaVis1on — Komut Rehberi', 'Tüm komutlar aşağıda kategorilere göre listelenmiştir.')
+        const embed = createEmbed('premium', '📖 MetaVis1on — Komut Rehberi',
+            '**İlk kez başlıyorsan:** `/gunluk` → `/calis` → `/bakiye` → `/yatir` → `/sezon`\n\nTüm komutlar aşağıda kategorilere göre listelenmiştir.')
             .addFields(
                 {
                     name: '💸 Para Yönetimi',

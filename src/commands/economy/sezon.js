@@ -60,6 +60,9 @@ module.exports = {
                     { name: '📈 Sıradaki Seviye', value: nextLevelText,                   inline: false },
                     { name: '📅 Sezon Bitişi',
                       value: `${formatSeasonDate(season.ends_at)}\nKalan: **${getRemainingText(season.ends_at)}**`,
+                      inline: false },
+                    { name: '📌 Puan Nasıl Kazanılır?',
+                      value: 'Günlük ödül, çalışma, suç, kasa açma, satış, kredi ödeme ve bazı oyun komutları sezon puanı kazandırır.',
                       inline: false }
                 )
                 .setFooter({ text: 'Sezon puanı, aktif ekonomi komutlarını kullandıkça kazanılır.' });
