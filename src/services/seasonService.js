@@ -241,6 +241,81 @@ async function getUserSeasonRank(userId, db = pool) {
     }
 }
 
+// ================== [ SEZON YÖNETİMİ ] ==================
+async function startSeason(name, durationDays = 30, db = pool) {
+    try {
+        const safeDays = Math.max(1, Math.min(90, Math.floor(Number(durationDays) || 30)));
+
+        const existing = await getCurrentSeason(db);
+        if (existing) {
+            return { ok: false, reason: 'active_season_exists', season: existing };
+        }
+
+        const countRes = await db.query('SELECT COUNT(*) FROM economy_seasons');
+        const num = Number(countRes.rows[0].count) + 1;
+        const finalName = (name && String(name).trim()) || `Sezon ${num}`;
+
+        const endsAt = new Date(Date.now() + safeDays * 86400000);
+        const res = await db.query(
+            `INSERT INTO economy_seasons (name, started_at, ends_at, status)
+             VALUES ($1, NOW(), $2, 'active')
+             RETURNING *`,
+            [finalName, endsAt]
+        );
+        return { ok: true, season: res.rows[0] };
+    } catch (err) {
+        console.error('Sezon başlatma hatası:', err && err.message ? err.message : err);
+        return { ok: false, reason: 'error' };
+    }
+}
+
+async function completeCurrentSeason(db = pool) {
+    try {
+        const season = await getCurrentSeason(db);
+        if (!season) {
+            return { ok: false, reason: 'no_active_season' };
+        }
+        const res = await db.query(
+            `UPDATE economy_seasons SET status = 'completed', ends_at = NOW() WHERE id = $1 RETURNING *`,
+            [season.id]
+        );
+        return { ok: true, season: res.rows[0] };
+    } catch (err) {
+        console.error('Sezon bitirme hatası:', err && err.message ? err.message : err);
+        return { ok: false, reason: 'error' };
+    }
+}
+
+async function getSeasonUserCount(seasonId, db = pool) {
+    try {
+        const res = await db.query(
+            'SELECT COUNT(*) FROM economy_season_users WHERE season_id = $1',
+            [seasonId]
+        );
+        return Number(res.rows[0].count) || 0;
+    } catch (err) {
+        console.error('Sezon kullanıcı sayısı hatası:', err && err.message ? err.message : err);
+        return 0;
+    }
+}
+
+async function getSeasonTopUser(seasonId, db = pool) {
+    try {
+        const res = await db.query(
+            `SELECT user_id, points, season_level
+             FROM economy_season_users
+             WHERE season_id = $1
+             ORDER BY points DESC
+             LIMIT 1`,
+            [seasonId]
+        );
+        return res.rows[0] || null;
+    } catch (err) {
+        console.error('Sezon lider kullanıcı hatası:', err && err.message ? err.message : err);
+        return null;
+    }
+}
+
 module.exports = {
     SEASON_LEVELS,
     calculateSeasonLevel,
@@ -250,5 +325,9 @@ module.exports = {
     grantSeasonPoints,
     grantCappedPoints,
     getSeasonLeaderboard,
-    getUserSeasonRank
+    getUserSeasonRank,
+    startSeason,
+    completeCurrentSeason,
+    getSeasonUserCount,
+    getSeasonTopUser
 };

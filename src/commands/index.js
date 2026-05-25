@@ -36,13 +36,15 @@ const economyModules = [
     require('./economy/sat'),
     require('./economy/sezon'),
     require('./economy/sezonSiralama'),
+    require('./economy/sezonOduller'),
     require('./economy/yardim')
 ];
 
 const adminModules = [
     require('./admin/paraEkle'),
     require('./admin/paraSil'),
-    require('./admin/ekonomiSifirla')
+    require('./admin/ekonomiSifirla'),
+    require('./admin/sezonYonet')
 ];
 
 const allModules = [...economyModules, ...adminModules];
