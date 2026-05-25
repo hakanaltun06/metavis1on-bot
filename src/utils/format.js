@@ -1,6 +1,6 @@
 const { CURRENCY, CURRENCY_NAME } = require('./constants');
 
-const formatNumber = (num) => Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(num);
+const formatNumber = (num) => new Intl.NumberFormat('tr-TR').format(num);
 const formatFull = (num) => new Intl.NumberFormat('tr-TR').format(num);
 
 const fmtMoney = (n) => `**${formatFull(n)} ${CURRENCY_NAME}** ${CURRENCY}`;
