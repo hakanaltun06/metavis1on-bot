@@ -10,6 +10,13 @@ const {
 } = require('../../services/economyService');
 const { getCrateTypes, calculateCrateDynamicPrice } = require('../../services/crateService');
 
+function buildPriceEffectLine(current, base) {
+    const pct = Math.round((current / base - 1) * 100);
+    if (Math.abs(pct) <= 1) return '→ Normal fiyat';
+    if (pct > 0) return `↗ %${pct} pahalı · Temel: ${formatFull(base)} ${CURRENCY_NAME} ${CURRENCY}`;
+    return `↘ %${Math.abs(pct)} ucuz · Temel: ${formatFull(base)} ${CURRENCY_NAME} ${CURRENCY}`;
+}
+
 module.exports = {
     data: { name: 'market', description: 'Market eşyalarını ve güncel fiyatları gösterir.' },
     async execute(interaction) {
@@ -23,13 +30,10 @@ module.exports = {
         SHOP_ITEMS.forEach(item => {
             const dynamic = getDynamicPrice(item, index);
             const base = Number(item.price);
-            const samePrice = dynamic === base;
-            const priceLine = samePrice
-                ? `${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY}`
-                : `${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY} *(temel ${formatFull(base)})*`;
+            const effectLine = buildPriceEffectLine(dynamic, base);
             embed.addFields({
-                name: `${item.name} — ${priceLine}`,
-                value: `Kod: \`${item.id}\`\n*${item.desc}*`,
+                name: `${item.name} — ${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY}`,
+                value: `${effectLine}\nKod: \`${item.id}\`\n*${item.desc}*`,
                 inline: false
             });
         });
@@ -38,13 +42,10 @@ module.exports = {
         getCrateTypes().forEach(crate => {
             const dynamic = calculateCrateDynamicPrice(crate, index);
             const base = crate.basePrice;
-            const samePrice = dynamic === base;
-            const priceLine = samePrice
-                ? `${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY}`
-                : `${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY} *(temel ${formatFull(base)})*`;
+            const effectLine = buildPriceEffectLine(dynamic, base);
             embed.addFields({
-                name: `${crate.name} — ${priceLine}`,
-                value: `Kod: \`${crate.code}\`\n*${crate.desc}*`,
+                name: `${crate.name} — ${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY}`,
+                value: `${effectLine}\nKod: \`${crate.code}\`\n*${crate.desc}*`,
                 inline: false
             });
         });

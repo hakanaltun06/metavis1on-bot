@@ -5,6 +5,13 @@ const { getInventory } = require('../../database/inventory');
 const { getCrateTypes, calculateCrateDynamicPrice } = require('../../services/crateService');
 const { getMoneySupply, calculateInflationIndex } = require('../../services/economyService');
 
+function buildPriceEffectLine(current, base) {
+    const pct = Math.round((current / base - 1) * 100);
+    if (Math.abs(pct) <= 1) return '→ Normal fiyat';
+    if (pct > 0) return `↗ %${pct} pahalı · Temel: ${formatFull(base)} ${CURRENCY_NAME} ${CURRENCY}`;
+    return `↘ %${Math.abs(pct)} ucuz · Temel: ${formatFull(base)} ${CURRENCY_NAME} ${CURRENCY}`;
+}
+
 module.exports = {
     data: { name: 'kasa', description: 'Kasa türlerini ve sahip olduğun kasaları gösterir.' },
     async execute(interaction) {
@@ -23,12 +30,12 @@ module.exports = {
         for (const crate of crates) {
             const dynamicPrice = calculateCrateDynamicPrice(crate, index);
             const owned = inventoryMap[crate.code] || 0;
-            const priceText = `${formatFull(dynamicPrice)} ${CURRENCY_NAME} ${CURRENCY}`;
+            const effectLine = buildPriceEffectLine(dynamicPrice, crate.basePrice);
             const ownedText = owned > 0 ? `Sahip: **${owned} adet**` : 'Sahip: yok';
 
             embed.addFields({
-                name: `${crate.name} — ${priceText}`,
-                value: `${crate.desc}\nKod: \`${crate.code}\` — ${ownedText}`,
+                name: `${crate.name} — ${formatFull(dynamicPrice)} ${CURRENCY_NAME} ${CURRENCY}`,
+                value: `${effectLine}\n${crate.desc}\nKod: \`${crate.code}\` — ${ownedText}`,
                 inline: false
             });
         }
