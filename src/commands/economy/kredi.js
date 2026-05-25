@@ -36,7 +36,7 @@ const { refreshUserLoans } = require('../../services/loanRefresh');
 module.exports = {
     data: {
         name: 'kredi',
-        description: 'Kredi alma, ödeme ve kredi puanı işlemleri.',
+        description: 'Kredi bilgilerini, borçlarını ve kredi puanını yönetirsin.',
         options: [
             {
                 name: 'bilgi',
@@ -48,10 +48,10 @@ module.exports = {
                 description: 'Yeni bir kredi çekersin.',
                 type: 1,
                 options: [
-                    { name: 'miktar', description: 'Çekmek istediğin miktar.', type: 4, required: true },
+                    { name: 'miktar', description: 'Çekmek istediğin MetaCoin miktarı.', type: 4, required: true },
                     {
                         name: 'vade',
-                        description: 'Geri ödeme süresi.',
+                        description: 'Kredinin kaç günde ödeneceği.',
                         type: 3,
                         required: true,
                         choices: [
@@ -68,7 +68,7 @@ module.exports = {
                 type: 1,
                 options: [
                     { name: 'kredi', description: 'Ödeme yapılacak kredi numarası.', type: 4, required: true },
-                    { name: 'miktar', description: 'Ödeme miktarı.', type: 4, required: true }
+                    { name: 'miktar', description: 'Ödemek istediğin MetaCoin miktarı.', type: 4, required: true }
                 ]
             },
             {
@@ -141,7 +141,8 @@ async function handleBilgi(interaction) {
             { name: 'Aktif Kredi Hakkı', value: `**${maxActive}** kredi`, inline: true },
             { name: 'Tahmini Faiz', value: rateText, inline: true },
             { name: 'Vade Seçenekleri', value: '3 / 7 / 14 gün', inline: true }
-        );
+        )
+        .setFooter({ text: 'Puanın ödeme geçmişine göre değişir. Yüksek puan daha iyi koşullar sağlar.' });
     return interaction.reply({ embeds: [embed] });
 }
 

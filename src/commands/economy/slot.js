@@ -10,7 +10,7 @@ module.exports = {
     data: {
         name: 'slot',
         description: 'Slot makinesini çevirirsin.',
-        options: [{ name: 'miktar', description: 'Bahis miktarı', type: 4, required: true }]
+        options: [{ name: 'miktar', description: 'Bahis olarak koymak istediğin miktar.', type: 4, required: true }]
     },
     async execute(interaction) {
         const amount = interaction.options.getInteger('miktar');

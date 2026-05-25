@@ -10,7 +10,7 @@ const {
 } = require('../../services/economyService');
 
 module.exports = {
-    data: { name: 'market', description: 'Alınabilecek eşyaları gösterir.' },
+    data: { name: 'market', description: 'Market eşyalarını ve güncel fiyatları gösterir.' },
     async execute(interaction) {
         const supply = await getMoneySupply();
         const index = calculateInflationIndex(supply.total);
@@ -33,6 +33,7 @@ module.exports = {
             });
         });
 
+        embed.setFooter({ text: 'Eşya almak için /satinal <kod> kullan.' });
         await interaction.reply({ embeds: [embed] });
     }
 };

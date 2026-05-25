@@ -8,8 +8,8 @@ const { calculateFillPct } = require('../../services/bankService');
 module.exports = {
     data: {
         name: 'bakiye',
-        description: 'Cüzdanını ve bankadaki paranı gösterir.',
-        options: [{ name: 'kullanici', description: 'Başka birinin bakiyesine bakmak için seç.', type: 6, required: false }]
+        description: 'Cüzdanını, bankanı ve toplam servetini gösterir.',
+        options: [{ name: 'kullanici', description: 'Bakiyesine bakmak istediğin kullanıcı.', type: 6, required: false }]
     },
     async execute(interaction) {
         const target = interaction.options.getUser('kullanici') || interaction.user;

@@ -13,7 +13,7 @@ const {
 } = require('../../services/bankService');
 
 module.exports = {
-    data: { name: 'faiz', description: 'Bankandaki paraya faiz işler. 12 saatte bir alınabilir.' },
+    data: { name: 'faiz', description: 'Bankandaki paran üzerinden faiz alırsın.' },
     async execute(interaction) {
         try {
             const result = await withTx(async (db) => {

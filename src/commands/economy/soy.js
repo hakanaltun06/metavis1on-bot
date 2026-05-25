@@ -17,7 +17,7 @@ module.exports = {
     data: {
         name: 'soy',
         description: 'Başka bir kullanıcının cüzdanını soymayı denersin.',
-        options: [{ name: 'hedef', description: 'Kimi soymak istiyorsun?', type: 6, required: true }]
+        options: [{ name: 'hedef', description: 'Soymak istediğin kullanıcı.', type: 6, required: true }]
     },
     async execute(interaction) {
         const target = interaction.options.getUser('hedef');

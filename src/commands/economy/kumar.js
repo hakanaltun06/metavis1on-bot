@@ -16,7 +16,7 @@ module.exports = {
     data: {
         name: 'kumar',
         description: 'Zar atarak şansını denersin.',
-        options: [{ name: 'miktar', description: 'Bahis miktarı', type: 4, required: true }]
+        options: [{ name: 'miktar', description: 'Bahis olarak koymak istediğin miktar.', type: 4, required: true }]
     },
     async execute(interaction) {
         const amount = interaction.options.getInteger('miktar');

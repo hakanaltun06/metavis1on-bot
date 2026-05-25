@@ -11,8 +11,8 @@ const { refreshUserLoans } = require('../../services/loanRefresh');
 module.exports = {
     data: {
         name: 'profil',
-        description: 'Detaylı ekonomi profilini gösterir.',
-        options: [{ name: 'kullanici', description: 'Başka birinin profili.', type: 6, required: false }]
+        description: 'Ekonomi profilini ve genel durumunu gösterir.',
+        options: [{ name: 'kullanici', description: 'Profiline bakmak istediğin kullanıcı.', type: 6, required: false }]
     },
     async execute(interaction) {
         const target = interaction.options.getUser('kullanici') || interaction.user;

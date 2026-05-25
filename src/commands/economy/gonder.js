@@ -11,7 +11,7 @@ module.exports = {
         name: 'gonder',
         description: 'Başka bir kullanıcıya MetaCoin gönderir.',
         options: [
-            { name: 'kullanici', description: 'Parayı kime göndereceksin?', type: 6, required: true },
+            { name: 'kullanici', description: 'MetaCoin göndermek istediğin kullanıcı.', type: 6, required: true },
             { name: 'miktar', description: 'Gönderilecek miktar.', type: 4, required: true }
         ]
     },

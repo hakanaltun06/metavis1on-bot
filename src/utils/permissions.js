@@ -1,16 +1,29 @@
 const { MessageFlags } = require('discord.js');
-const { OWNER_ID } = require('../config/env');
+const { OWNER_IDS } = require('../config/env');
 const { createEmbed } = require('./embeds');
 
-function checkAdmin(interaction) {
-    if (interaction.user.id === OWNER_ID) return true;
-    const member = interaction.member;
-    const isAdmin = !!(member && member.permissions && typeof member.permissions.has === 'function' && member.permissions.has('Administrator'));
-    if (!isAdmin) {
-        interaction.reply({ embeds: [createEmbed('error', '⛔ Yetki Yok', 'Bu komutu yalnızca yetkili kişiler kullanabilir.')], flags: MessageFlags.Ephemeral });
+function isBotOwner(userId) {
+    return OWNER_IDS.length > 0 && OWNER_IDS.includes(userId);
+}
+
+function requireOwner(interaction) {
+    if (OWNER_IDS.length === 0) {
+        console.warn('Bot sahibi tanımlanmamış. OWNER_ID veya OWNER_IDS ayarlanmalı.');
+        interaction.reply({
+            embeds: [createEmbed('error', '⛔ İşlem Yapılamadı', 'Bot sahibi tanımlanmamış. Güvenlik nedeniyle işlem yapılmadı.')],
+            flags: MessageFlags.Ephemeral
+        });
+        return false;
+    }
+    if (!isBotOwner(interaction.user.id)) {
+        console.warn('Yetkisiz yönetici komutu denemesi engellendi.');
+        interaction.reply({
+            embeds: [createEmbed('error', '⛔ Yetki Yok', 'Bu komutu yalnızca bot sahibi kullanabilir.')],
+            flags: MessageFlags.Ephemeral
+        });
         return false;
     }
     return true;
 }
 
-module.exports = { checkAdmin };
+module.exports = { isBotOwner, requireOwner };

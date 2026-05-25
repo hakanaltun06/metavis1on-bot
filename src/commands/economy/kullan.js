@@ -8,7 +8,7 @@ module.exports = {
     data: {
         name: 'kullan',
         description: 'Envanterindeki bir eşyayı kullanırsın.',
-        options: [{ name: 'esya', description: 'Kullanılacak eşyanın kodu.', type: 3, required: true }]
+        options: [{ name: 'esya', description: 'Kullanmak istediğin eşyanın kodu.', type: 3, required: true }]
     },
     async execute(interaction) {
         const itemId = interaction.options.getString('esya').toLowerCase();

@@ -50,7 +50,8 @@ module.exports = {
                 { name: 'Kredi Durumu', value: krediNot, inline: false },
                 { name: 'Yükseltme', value: upgradeText, inline: false }
             )
-            .setThumbnail(interaction.user.displayAvatarURL());
+            .setThumbnail(interaction.user.displayAvatarURL())
+            .setFooter({ text: 'Faiz almak için /faiz · Kapasiteyi artırmak için /banka-yukselt' });
 
         await interaction.reply({ embeds: [embed] });
     }

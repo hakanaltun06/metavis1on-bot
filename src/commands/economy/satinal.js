@@ -16,8 +16,8 @@ module.exports = {
         name: 'satinal',
         description: 'Marketten eşya satın alırsın.',
         options: [
-            { name: 'esya', description: 'Alınacak eşyanın kodu (market içinde görünüyor).', type: 3, required: true },
-            { name: 'adet', description: 'Kaç tane?', type: 4, required: false }
+            { name: 'esya', description: 'Almak istediğin eşyanın kodu.', type: 3, required: true },
+            { name: 'adet', description: 'Kaç adet almak istiyorsun?', type: 4, required: false }
         ]
     },
     async execute(interaction) {

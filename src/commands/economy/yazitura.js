@@ -11,7 +11,7 @@ module.exports = {
         name: 'yazitura', description: 'Yazı tura atarsın.',
         options: [
             { name: 'secim', description: 'Yazı mı tura mı?', type: 3, required: true, choices: [{ name: 'Yazı', value: 'yazi' }, { name: 'Tura', value: 'tura' }] },
-            { name: 'miktar', description: 'Bahis miktarı', type: 4, required: true }
+            { name: 'miktar', description: 'Bahis olarak koymak istediğin miktar.', type: 4, required: true }
         ]
     },
     async execute(interaction) {
