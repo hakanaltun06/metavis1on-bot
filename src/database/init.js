@@ -74,6 +74,31 @@ async function initDB() {
             CREATE INDEX IF NOT EXISTS idx_loans_status  ON economy_loans(status);
             CREATE INDEX IF NOT EXISTS idx_loans_due_at  ON economy_loans(due_at);
 
+            CREATE TABLE IF NOT EXISTS economy_seasons (
+                id         SERIAL PRIMARY KEY,
+                name       VARCHAR(100) NOT NULL,
+                started_at TIMESTAMP NOT NULL,
+                ends_at    TIMESTAMP NOT NULL,
+                status     TEXT DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS economy_season_users (
+                id              SERIAL PRIMARY KEY,
+                season_id       INTEGER NOT NULL REFERENCES economy_seasons(id),
+                user_id         VARCHAR(25) NOT NULL,
+                points          INTEGER DEFAULT 0,
+                season_level    INTEGER DEFAULT 1,
+                daily_cap_data  JSONB DEFAULT '{}'::jsonb,
+                last_updated    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                rewards_claimed BOOLEAN DEFAULT false,
+                UNIQUE(season_id, user_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_season_users_season_id ON economy_season_users(season_id);
+            CREATE INDEX IF NOT EXISTS idx_season_users_points    ON economy_season_users(season_id, points DESC);
+            CREATE INDEX IF NOT EXISTS idx_season_users_user_id   ON economy_season_users(user_id);
+
             CREATE TABLE IF NOT EXISTS economy_crate_logs (
                 id SERIAL PRIMARY KEY,
                 user_id TEXT NOT NULL,
