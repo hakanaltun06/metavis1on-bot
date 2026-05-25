@@ -14,6 +14,15 @@ const {
     getRarityEmoji
 } = require('../../services/crateService');
 const { findItemById } = require('../../services/shopService');
+const { grantCappedPoints } = require('../../services/seasonService');
+
+function getSellSeasonPoints(rarity) {
+    const key = String(rarity || '').toLowerCase();
+    if (key.includes('efsane') || key.includes('legendary')) return 40;
+    if (key.includes('epik') || key.includes('epic')) return 18;
+    if (key.includes('ender') || key.includes('rare')) return 8;
+    return 3;
+}
 
 module.exports = {
     data: {
@@ -127,6 +136,13 @@ module.exports = {
                 });
             }
 
+            let seasonGrant = null;
+            try {
+                seasonGrant = await grantCappedPoints(interaction.user.id, 'sell', getSellSeasonPoints(rareItem.rarity) * qty, 100);
+            } catch (err) {
+                console.error('Sezon puanı eklenemedi (sat):', err?.message);
+            }
+
             const emoji = getRarityEmoji(rareItem.rarity);
             const desc = qty === 1
                 ? `**1** adet ${emoji} ${rareItem.name} sattın.`
@@ -139,7 +155,9 @@ module.exports = {
                     { name: 'Yeni Cüzdan', value: fmtMoney(result.newWallet), inline: true }
                 )
                 .setFooter({ text: 'Kalan eşyalarını /envanter ile görebilirsin.' });
-
+            if (seasonGrant && seasonGrant.granted > 0) {
+                embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            }
             return interaction.reply({ embeds: [embed] });
 
         } catch (err) {

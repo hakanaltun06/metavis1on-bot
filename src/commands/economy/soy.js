@@ -12,6 +12,9 @@ const {
     rollRob,
     computeRobPenalty
 } = require('../../services/riskService');
+const { grantCappedPoints } = require('../../services/seasonService');
+
+const ROB_SEASON_POINTS = { success: 18, caught: 6, shielded: 8 };
 
 module.exports = {
     data: {
@@ -67,8 +70,23 @@ module.exports = {
             if (result.kind === 'target_poor') {
                 return interaction.reply({ embeds: [createEmbed('error', '❌ Değmez', 'Hedefin cüzdanı çok zayıf. Buna değmez.')], flags: MessageFlags.Ephemeral });
             }
+
+            const robPoints = ROB_SEASON_POINTS[result.kind] || 0;
+            let seasonGrant = null;
+            if (robPoints > 0) {
+                try {
+                    seasonGrant = await grantCappedPoints(interaction.user.id, 'rob', robPoints, 60);
+                } catch (err) {
+                    console.error('Sezon puanı eklenemedi (soy):', err?.message);
+                }
+            }
+
             if (result.kind === 'shielded') {
-                return interaction.reply({ embeds: [createEmbed('info', '🛡️ Engellendi', `${target.username} kişisinde **Soygun Kalkanı** vardı. Kalkan kırıldı ama hedef güvende.`)] });
+                const shieldEmbed = createEmbed('info', '🛡️ Engellendi', `${target.username} kişisinde **Soygun Kalkanı** vardı. Kalkan kırıldı ama hedef güvende.`);
+                if (seasonGrant && seasonGrant.granted > 0) {
+                    shieldEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+                }
+                return interaction.reply({ embeds: [shieldEmbed] });
             }
             if (result.kind === 'success') {
                 const successEmbed = createEmbed('success', '🥷 Soygun Başarılı', `${target.username} uyurken cüzdanına girdin.`)
@@ -78,6 +96,9 @@ module.exports = {
                         { name: 'Yeni Cüzdanın', value: fmtMoney(result.newWallet), inline: true }
                     )
                     .setFooter({ text: 'Riskli işlemlerden sonra durumunu /bakiye ile kontrol edebilirsin.' });
+                if (seasonGrant && seasonGrant.granted > 0) {
+                    successEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+                }
                 return interaction.reply({ embeds: [successEmbed] });
             }
             const caughtEmbed = createEmbed('error', '🚔 Yakalandın', 'Hedef uyandı.')
@@ -86,6 +107,9 @@ module.exports = {
                     { name: 'Yeni Cüzdanın', value: fmtMoney(result.newWallet), inline: true }
                 )
                 .setFooter({ text: 'Bekleme süreni görmek için /bekleme kullan.' });
+            if (seasonGrant && seasonGrant.granted > 0) {
+                caughtEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            }
             return interaction.reply({ embeds: [caughtEmbed] });
         } catch (err) {
             console.error('Soy hatası:', err && err.message ? err.message : err);

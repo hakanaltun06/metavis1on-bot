@@ -12,6 +12,14 @@ const {
     getRarityLabel,
     getRarityEmoji
 } = require('../../services/crateService');
+const { grantCappedPoints } = require('../../services/seasonService');
+
+const CRATE_SEASON_POINTS = {
+    basit_kasa: 5,
+    nadir_kasa: 15,
+    epik_kasa: 35,
+    efsanevi_kasa: 90
+};
 
 module.exports = {
     data: {
@@ -127,6 +135,16 @@ module.exports = {
                 });
             }
 
+            const perCratePoints = CRATE_SEASON_POINTS[crateCode] || 0;
+            let seasonGrant = null;
+            if (perCratePoints > 0) {
+                try {
+                    seasonGrant = await grantCappedPoints(interaction.user.id, 'crate', perCratePoints * qty, 200);
+                } catch (err) {
+                    console.error('Sezon puanı eklenemedi (kasa-ac):', err?.message);
+                }
+            }
+
             const rewardLines = result.rewards.map((r, i) => {
                 if (r.type === 'coin') {
                     return `**${i + 1}.** ${formatFull(r.amount)} ${CURRENCY_NAME} ${CURRENCY}`;
@@ -151,6 +169,9 @@ module.exports = {
                 embed.addFields({ name: 'Toplam MetaCoin', value: fmtMoney(result.totalCoinReward), inline: true });
             }
             embed.addFields({ name: 'Kalan Kasa', value: `**${result.remaining}** adet`, inline: true });
+            if (seasonGrant && seasonGrant.granted > 0) {
+                embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            }
             embed.setFooter({ text: 'Eşyalarını /envanter ile gör · Satılabilir eşyalar için /sat' });
             return interaction.reply({ embeds: [embed] });
 

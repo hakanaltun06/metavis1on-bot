@@ -31,6 +31,7 @@ const {
     LOAN_AMOUNT_MIN
 } = require('../../services/loanService');
 const { refreshUserLoans } = require('../../services/loanRefresh');
+const { grantCappedPoints } = require('../../services/seasonService');
 
 // ================== [ KOMUT TANIMI ] ==================
 module.exports = {
@@ -362,6 +363,14 @@ async function handleOde(interaction) {
         });
     }
 
+    const loanSeasonPoints = outcome.closed ? 15 : 10;
+    let seasonGrant = null;
+    try {
+        seasonGrant = await grantCappedPoints(interaction.user.id, 'loan', loanSeasonPoints, 45);
+    } catch (err) {
+        console.error('Sezon puanı eklenemedi (kredi-ode):', err?.message);
+    }
+
     if (outcome.closed) {
         const embed = createEmbed('credit', '✅ Borç Kapandı', 'Kredi borcun tamamen kapandı.')
             .addFields(
@@ -371,6 +380,9 @@ async function handleOde(interaction) {
                 { name: 'Puan Değişimi', value: `**+${outcome.scoreDelta}**`, inline: true }
             )
             .setFooter({ text: 'Düzenli ödeme, kredi limitini zamanla yükseltir.' });
+        if (seasonGrant && seasonGrant.granted > 0) {
+            embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+        }
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -386,6 +398,9 @@ async function handleOde(interaction) {
             ...scoreField
         )
         .setFooter({ text: 'Borcu tamamen kapatırsan kredi puanın daha fazla yükselir.' });
+    if (seasonGrant && seasonGrant.granted > 0) {
+        embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+    }
     return interaction.reply({ embeds: [embed] });
 }
 
