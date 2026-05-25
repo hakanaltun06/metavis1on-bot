@@ -6,6 +6,7 @@ const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { COOLDOWNS } = require('../../utils/constants');
 const { REWARDS } = require('../../services/rewardsService');
+const { grantSeasonPoints } = require('../../services/seasonService');
 
 module.exports = {
     data: { name: 'aylik', description: 'Aylık dev ödülünü alırsın.' },
@@ -19,6 +20,14 @@ module.exports = {
         const reward = REWARDS.MONTHLY;
         await addMoney(interaction.user.id, reward, 'wallet');
         await pool.query('UPDATE economy_users SET last_monthly = CURRENT_TIMESTAMP WHERE user_id = $1', [interaction.user.id]);
+
+        let seasonGrant = null;
+        try {
+            seasonGrant = await grantSeasonPoints(interaction.user.id, 150);
+        } catch (err) {
+            console.error('Sezon puanı eklenemedi (aylik):', err?.message);
+        }
+
         const newWallet = Number(userData.wallet) + reward;
         const embed = createEmbed('reward', '🏆 Aylık Ödül Alındı', 'Aylık MetaCoin ödülün cüzdanına eklendi.')
             .addFields(
@@ -27,6 +36,9 @@ module.exports = {
                 { name: 'Sonraki Aylık', value: '30 gün sonra', inline: true }
             )
             .setFooter({ text: 'Aylık ödül büyük kazanç sağlar; cüzdanını ve bankanı dengeli kullan.' });
+        if (seasonGrant && seasonGrant.granted > 0) {
+            embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+        }
         await interaction.reply({ embeds: [embed] });
     }
 };

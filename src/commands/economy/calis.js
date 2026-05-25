@@ -7,6 +7,7 @@ const { fmtMoney } = require('../../utils/format');
 const { getMins } = require('../../utils/time');
 const { COOLDOWNS } = require('../../utils/constants');
 const { rollWorkReward } = require('../../services/rewardsService');
+const { grantSeasonPoints } = require('../../services/seasonService');
 
 module.exports = {
     data: { name: 'calis', description: 'Çalışıp MetaCoin kazanırsın.' },
@@ -27,6 +28,13 @@ module.exports = {
         await addMoney(interaction.user.id, reward, 'wallet');
         await pool.query('UPDATE economy_users SET last_work = CURRENT_TIMESTAMP, work_count = work_count + 1 WHERE user_id = $1', [interaction.user.id]);
 
+        let seasonGrant = null;
+        try {
+            seasonGrant = await grantSeasonPoints(interaction.user.id, 8);
+        } catch (err) {
+            console.error('Sezon puanı eklenemedi (calis):', err?.message);
+        }
+
         const embed = createEmbed('reward', '💼 Mesai Tamam', job)
             .addFields(
                 { name: 'Kazanç', value: fmtMoney(reward), inline: true },
@@ -34,6 +42,9 @@ module.exports = {
                 { name: 'Toplam Mesai', value: `**${newWorkCount}** kez`, inline: true }
             )
             .setFooter({ text: 'Daha büyük kazançlar için banka ve kasa sistemini de kullanabilirsin.' });
+        if (seasonGrant && seasonGrant.granted > 0) {
+            embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+        }
         await interaction.reply({ embeds: [embed] });
     }
 };

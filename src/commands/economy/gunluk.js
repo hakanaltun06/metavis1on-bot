@@ -6,6 +6,7 @@ const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { COOLDOWNS } = require('../../utils/constants');
 const { computeDailyReward, REWARDS } = require('../../services/rewardsService');
+const { grantSeasonPoints } = require('../../services/seasonService');
 
 module.exports = {
     data: { name: 'gunluk', description: 'Günlük ödülünü alırsın ve serini korursun.' },
@@ -28,6 +29,13 @@ module.exports = {
         await addMoney(interaction.user.id, totalReward, 'wallet');
         await pool.query('UPDATE economy_users SET daily_streak = $1, last_daily = CURRENT_TIMESTAMP WHERE user_id = $2', [newStreak, interaction.user.id]);
 
+        let seasonGrant = null;
+        try {
+            seasonGrant = await grantSeasonPoints(interaction.user.id, 12);
+        } catch (err) {
+            console.error('Sezon puanı eklenemedi (gunluk):', err?.message);
+        }
+
         const newWallet = Number(userData.wallet) + totalReward;
         const streakReset = diffDays > 1 && userData.daily_streak > 0;
         const footerText = streakReset
@@ -45,6 +53,9 @@ module.exports = {
             { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true },
             { name: 'Sonraki Günlük', value: '24 saat sonra', inline: true }
         );
+        if (seasonGrant && seasonGrant.granted > 0) {
+            fields.push({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+        }
 
         const embed = createEmbed('reward', '🎁 Günlük Ödül Alındı', 'Günlük MetaCoin ödülün cüzdanına eklendi.')
             .addFields(...fields)
