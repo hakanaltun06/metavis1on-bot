@@ -44,6 +44,14 @@ module.exports = {
             crateCoins = Number(cr.rows[0].s) || 0;
         } catch (_) {}
 
+        function getMoodComment(idx) {
+            if (idx < 0.95) return 'Fiyatlar düşük — alışveriş için iyi bir dönem.';
+            if (idx < 1.10) return 'Piyasa dengeli; alım ve birikim için uygun koşullar.';
+            if (idx < 1.60) return 'Fiyatlar yükseliyor; harcamalara dikkat et.';
+            if (idx < 2.50) return 'Pahalı dönem — büyük alımları ertelemeyi düşün.';
+            return 'Sert enflasyon; mümkünse harcamalarını kıs ve biriktir.';
+        }
+
         const embed = createEmbed('economy', '📊 Ekonomi Durumu')
             .addFields(
                 { name: 'Kayıtlı Kullanıcı', value: `**${data.users}** kişi`, inline: true },
@@ -52,13 +60,14 @@ module.exports = {
                 { name: 'Toplam Servet', value: `**${formatNumber(totalMoney)}** ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: 'Toplam Faiz Kazancı', value: `${formatNumber(tInt)} ${CURRENCY_NAME}`, inline: true },
                 { name: 'Banka Seviyesi', value: `Ortalama **${avgLvl.toFixed(2)}** — En yüksek **${maxLvl}**`, inline: true },
-                { name: 'Piyasa Durumu', value: `**${mood}**`, inline: true },
+                { name: 'Piyasa Durumu', value: `**${mood}**\n*${getMoodComment(index)}*`, inline: true },
                 { name: 'Fiyat Etkisi', value: `**${effect}**`, inline: true },
                 { name: 'Kredi Durumu', value: `Aktif: **${loanStats.activeCount}** — Açık Borç: **${formatNumber(loanStats.activeDebt)}** ${CURRENCY_NAME}\nOrtalama Puan: **${avgScore.toFixed(0)}**`, inline: false }
             );
         if (crateOpens > 0) {
             embed.addFields({ name: '📦 Kasa Sistemi', value: `Açılan: **${formatNumber(crateOpens)}** kasa\nDağıtılan: **${formatNumber(crateCoins)}** ${CURRENCY_NAME}`, inline: true });
         }
+        embed.setFooter({ text: 'Fiyat etkisini detaylı görmek için /enflasyon kullan.' });
         await interaction.reply({ embeds: [embed] });
     }
 };

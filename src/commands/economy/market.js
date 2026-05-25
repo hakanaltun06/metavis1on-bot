@@ -49,7 +49,7 @@ module.exports = {
             });
         });
 
-        embed.setFooter({ text: 'Eşya veya kasa almak için /satinal <kod> kullan.' });
+        embed.setFooter({ text: 'Satın almak için /satinal · Eşyaların için /envanter · Kasalar için /kasa-ac' });
         await interaction.reply({ embeds: [embed] });
     }
 };

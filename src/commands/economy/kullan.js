@@ -32,7 +32,14 @@ module.exports = {
         if (itemId === 'energy_drink') {
             await pool.query('UPDATE economy_users SET last_work = NULL, last_crime = NULL WHERE user_id = $1', [interaction.user.id]);
             await consumeItem(interaction.user.id, itemId, 1);
-            return interaction.reply({ embeds: [createEmbed('success', '⚡ Enerji Geldi', 'Enerji içeceğini içtin. Çalışma ve suç bekleme süreleri sıfırlandı.')] });
+            const embed = createEmbed('success', '⚡ Enerji Geldi')
+                .addFields(
+                    { name: 'Kullanılan Eşya', value: 'Enerji İçeceği', inline: true },
+                    { name: 'Etki', value: 'Çalışma ve risk aksiyonları için bekleme yenilendi', inline: true },
+                    { name: 'Sonraki Adım', value: '/calis veya /suc kullanabilirsin', inline: false }
+                )
+                .setFooter({ text: 'Eşyalarını görmek için /envanter kullan.' });
+            return interaction.reply({ embeds: [embed] });
         }
     }
 };
