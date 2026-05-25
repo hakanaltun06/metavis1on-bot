@@ -4,6 +4,19 @@ const { genericErrorEmbed } = require('../utils/embeds');
 
 function attachInteractionHandler(client) {
     client.on('interactionCreate', async (interaction) => {
+        if (interaction.isAutocomplete()) {
+            const acCommand = resolveCommand(interaction.commandName);
+            if (acCommand && typeof acCommand.autocomplete === 'function') {
+                try {
+                    await acCommand.autocomplete(interaction);
+                } catch (err) {
+                    console.error('Autocomplete hatası:', err && err.message ? err.message : err);
+                    await interaction.respond([]).catch(() => null);
+                }
+            }
+            return;
+        }
+
         if (!interaction.isChatInputCommand()) return;
 
         const requestedName = interaction.commandName;

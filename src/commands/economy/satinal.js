@@ -3,24 +3,53 @@ const { withTx } = require('../../database/tx');
 const { ensureUser } = require('../../database/users');
 const { addItem } = require('../../database/inventory');
 const { createEmbed } = require('../../utils/embeds');
-const { fmtMoney } = require('../../utils/format');
+const { fmtMoney, formatFull } = require('../../utils/format');
+const { SHOP_ITEMS, CURRENCY, CURRENCY_NAME } = require('../../utils/constants');
 const { findItem } = require('../../services/shopService');
 const {
     getMoneySupply,
     calculateInflationIndex,
     getDynamicPrice
 } = require('../../services/economyService');
-const { getCrateByCode, calculateCrateDynamicPrice } = require('../../services/crateService');
+const { getCrateByCode, getCrateTypes, calculateCrateDynamicPrice } = require('../../services/crateService');
 
 module.exports = {
     data: {
         name: 'satinal',
         description: 'Marketten eşya veya kasa satın alırsın.',
         options: [
-            { name: 'esya', description: 'Almak istediğin eşya veya kasanın kodu.', type: 3, required: true },
+            { name: 'esya', description: 'Almak istediğin eşya veya kasayı seç.', type: 3, required: true, autocomplete: true },
             { name: 'adet', description: 'Kaç adet almak istiyorsun?', type: 4, required: false }
         ]
     },
+
+    async autocomplete(interaction) {
+        try {
+            const focused = interaction.options.getFocused().toLowerCase();
+            const supply = await getMoneySupply();
+            const index = calculateInflationIndex(supply.total);
+
+            const shopChoices = SHOP_ITEMS.map(item => ({
+                name: `${item.name} — ${formatFull(getDynamicPrice(item, index))} ${CURRENCY_NAME} ${CURRENCY}`,
+                value: item.id
+            }));
+
+            const crateChoices = getCrateTypes().map(crate => ({
+                name: `${crate.name} — ${formatFull(calculateCrateDynamicPrice(crate, index))} ${CURRENCY_NAME} ${CURRENCY}`,
+                value: crate.code
+            }));
+
+            const all = [...shopChoices, ...crateChoices];
+            const filtered = focused
+                ? all.filter(c => c.name.toLowerCase().includes(focused) || c.value.includes(focused))
+                : all;
+
+            await interaction.respond(filtered.slice(0, 25));
+        } catch (_) {
+            await interaction.respond([]).catch(() => null);
+        }
+    },
+
     async execute(interaction) {
         const itemId = interaction.options.getString('esya').toLowerCase();
         const qty = interaction.options.getInteger('adet') || 1;

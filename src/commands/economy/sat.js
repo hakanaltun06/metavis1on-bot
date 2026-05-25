@@ -1,13 +1,16 @@
 const { MessageFlags } = require('discord.js');
 const { withTx } = require('../../database/tx');
 const { ensureUser } = require('../../database/users');
-const { checkItem, safeConsumeItem } = require('../../database/inventory');
+const { checkItem, safeConsumeItem, getInventory } = require('../../database/inventory');
 const { logTransaction } = require('../../database/transactions');
 const { createEmbed } = require('../../utils/embeds');
-const { fmtMoney } = require('../../utils/format');
+const { fmtMoney, formatFull } = require('../../utils/format');
+const { CURRENCY, CURRENCY_NAME } = require('../../utils/constants');
 const {
     getSellableItemByCode,
     isCrateItem,
+    isRareItem,
+    getRareItemByCode,
     getRarityEmoji
 } = require('../../services/crateService');
 const { findItemById } = require('../../services/shopService');
@@ -17,10 +20,43 @@ module.exports = {
         name: 'sat',
         description: 'Koleksiyon eşyalarını MetaCoin karşılığında satarsın.',
         options: [
-            { name: 'esya', description: 'Satmak istediğin koleksiyon eşyasının kodu.', type: 3, required: true },
+            { name: 'esya', description: 'Satmak istediğin koleksiyon eşyasını seç.', type: 3, required: true, autocomplete: true },
             { name: 'adet', description: 'Kaç adet satmak istiyorsun?', type: 4, required: false, min_value: 1 }
         ]
     },
+
+    async autocomplete(interaction) {
+        try {
+            const focused = interaction.options.getFocused().toLowerCase();
+            const inventory = await getInventory(interaction.user.id);
+
+            const sellable = inventory
+                .filter(row => isRareItem(row.item_id) && row.quantity > 0)
+                .map(row => {
+                    const def = getRareItemByCode(row.item_id);
+                    if (!def) return null;
+                    const emoji = getRarityEmoji(def.rarity);
+                    return {
+                        name: `${emoji} ${def.name} (x${row.quantity}) — ${formatFull(def.sellValue)} ${CURRENCY_NAME} ${CURRENCY}`,
+                        value: def.code
+                    };
+                })
+                .filter(Boolean);
+
+            if (sellable.length === 0) {
+                return interaction.respond([]);
+            }
+
+            const filtered = focused
+                ? sellable.filter(c => c.name.toLowerCase().includes(focused))
+                : sellable;
+
+            await interaction.respond(filtered.slice(0, 25));
+        } catch (_) {
+            await interaction.respond([]).catch(() => null);
+        }
+    },
+
     async execute(interaction) {
         const itemCode = interaction.options.getString('esya').toLowerCase();
         const qty = interaction.options.getInteger('adet') || 1;
