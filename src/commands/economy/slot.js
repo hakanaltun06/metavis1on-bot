@@ -34,7 +34,8 @@ module.exports = {
                     { name: 'Çarpan', value: `**${spin.multiplier}x**`, inline: true },
                     { name: 'Kazanç', value: fmtMoney(profit), inline: true },
                     { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
-                );
+                )
+                .setFooter({ text: 'Daha fazla denemeden önce bakiyeni kontrol etmeyi unutma.' });
             return interaction.reply({ embeds: [winEmbed] });
         }
         const newWallet = Number(userData.wallet) - amount;
@@ -44,7 +45,8 @@ module.exports = {
                 { name: 'Bahis', value: fmtMoney(amount), inline: true },
                 { name: 'Kayıp', value: fmtMoney(amount), inline: true },
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
-            );
+            )
+            .setFooter({ text: 'Daha fazla denemeden önce bakiyeni kontrol etmeyi unutma.' });
         return interaction.reply({ embeds: [loseEmbed] });
     }
 };

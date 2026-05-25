@@ -76,14 +76,16 @@ module.exports = {
                         { name: 'Hedef', value: target.username, inline: true },
                         { name: 'Çalınan', value: fmtMoney(result.stolen), inline: true },
                         { name: 'Yeni Cüzdanın', value: fmtMoney(result.newWallet), inline: true }
-                    );
+                    )
+                    .setFooter({ text: 'Riskli işlemlerden sonra durumunu /bakiye ile kontrol edebilirsin.' });
                 return interaction.reply({ embeds: [successEmbed] });
             }
             const caughtEmbed = createEmbed('error', '🚔 Yakalandın', 'Hedef uyandı.')
                 .addFields(
                     { name: 'Kaybedilen', value: fmtMoney(result.penalty), inline: true },
                     { name: 'Yeni Cüzdanın', value: fmtMoney(result.newWallet), inline: true }
-                );
+                )
+                .setFooter({ text: 'Bekleme süreni görmek için /bekleme kullan.' });
             return interaction.reply({ embeds: [caughtEmbed] });
         } catch (err) {
             console.error('Soy hatası:', err && err.message ? err.message : err);

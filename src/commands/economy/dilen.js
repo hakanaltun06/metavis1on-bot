@@ -23,7 +23,7 @@ module.exports = {
 
         const outcome = rollBegResult();
         if (outcome.rejected) {
-            return interaction.reply({ embeds: [createEmbed('error', '😢 Eli Boş Döndün', 'Kimse sana para vermedi.')] });
+            return interaction.reply({ embeds: [createEmbed('error', '😢 Eli Boş Döndün', 'Kimse sana para vermedi.').setFooter({ text: 'Bekleme sürelerini görmek için /bekleme kullanabilirsin.' })] });
         }
 
         const newWallet = Number(userData.wallet) + outcome.reward;

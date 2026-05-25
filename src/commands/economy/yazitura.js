@@ -39,7 +39,8 @@ module.exports = {
                     { name: 'Sonuç', value: `${resultLabel} ✅`, inline: true },
                     { name: 'Kazanç', value: fmtMoney(amount), inline: true },
                     { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
-                );
+                )
+                .setFooter({ text: 'Şans oyunlarında bütçeni kontrol etmek için /bakiye kullan.' });
             return interaction.reply({ embeds: [winEmbed] });
         }
         const newWallet = Number(userData.wallet) - amount;
@@ -50,7 +51,8 @@ module.exports = {
                 { name: 'Sonuç', value: `${resultLabel} ❌`, inline: true },
                 { name: 'Kayıp', value: fmtMoney(amount), inline: true },
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
-            );
+            )
+            .setFooter({ text: 'Şans oyunlarında bütçeni kontrol etmek için /bakiye kullan.' });
         return interaction.reply({ embeds: [loseEmbed] });
     }
 };

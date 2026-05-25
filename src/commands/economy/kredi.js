@@ -412,6 +412,7 @@ async function handleListele(interaction) {
         ];
         embed.addFields({ name: `Kredi #${loan.id}`, value: lines.join('\n'), inline: false });
     }
+    embed.setFooter({ text: 'Ödeme yapmak için /kredi ode komutunu kullan.' });
     return interaction.reply({ embeds: [embed] });
 }
 
@@ -445,6 +446,7 @@ async function handlePuan(interaction) {
             { name: 'Toplam Ödenen', value: fmtMoney(totalRepaid), inline: true },
             { name: 'Gecikme Cezası', value: fmtMoney(totalLateFees), inline: true },
             { name: 'Açık Borç', value: acikBorcText, inline: false }
-        );
+        )
+        .setFooter({ text: 'Zamanında ödeme yapmak kredi puanını güçlendirir.' });
     return interaction.reply({ embeds: [embed] });
 }

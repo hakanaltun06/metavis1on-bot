@@ -42,7 +42,8 @@ module.exports = {
                 { name: 'Sonuç', value: '❌ Ceza', inline: true },
                 { name: 'Kesilen', value: fmtMoney(realPenalty), inline: true },
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
-            );
+            )
+            .setFooter({ text: 'Sıradaki fırsatı takip etmek için /bekleme kullan.' });
         return interaction.reply({ embeds: [loseEmbed] });
     }
 };

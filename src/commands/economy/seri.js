@@ -14,7 +14,8 @@ module.exports = {
         for (let i = 0; i < res.rows.length; i++) {
             let tag = 'Bilinmeyen Kullanıcı';
             try { tag = (await interaction.client.users.fetch(res.rows[i].user_id)).username; } catch (e) { }
-            desc += `🔥 **${res.rows[i].daily_streak} gün** — ${tag}\n`;
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**#${i + 1}**`;
+            desc += `${medal} 🔥 **${res.rows[i].daily_streak} gün** — ${tag}\n`;
         }
 
         const myStreak = Number(u.daily_streak) || 0;
