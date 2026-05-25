@@ -74,7 +74,7 @@ function getPriceTrend(index) {
 // Kullanıcıya görünen sade yüzde ifadesi
 function formatPriceEffect(index) {
     const pct = Math.round((index - 1) * 100);
-    if (pct === 0 || Math.abs(pct) <= 2) return 'Tam normal';
+    if (pct === 0 || Math.abs(pct) <= 1) return 'Tam normal';
     if (pct > 0) return `%${pct} daha pahalı`;
     return `%${Math.abs(pct)} daha ucuz`;
 }

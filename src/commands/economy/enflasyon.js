@@ -18,12 +18,13 @@ module.exports = {
         const trend = getPriceTrend(index);
         const effect = formatPriceEffect(index);
 
+        const itemNote = 'Her ürünün fiyat değişimine duyarlılığı farklıdır; gösterilen etki genel bir yön işaretidir.';
         function getIndexGuidance(idx) {
-            if (idx < 0.95) return 'Fiyatlar normalin altında. Kasa veya eşya almak için iyi bir fırsat.';
-            if (idx < 1.10) return 'Piyasa dengeli. Alışveriş ve birikim için uygun bir an.';
-            if (idx < 1.60) return 'Fiyatlar yükseliyor. Zorunlu olmayan alımları ertelemeyi düşünebilirsin.';
-            if (idx < 2.50) return 'Pahalı dönem. Büyük harcamalar yapmadan önce iki kez düşün.';
-            return 'Sert enflasyon. Harcamalarını kıs; piyasa düşene kadar biriktirmeye bak.';
+            if (idx < 0.95) return `Fiyatlar normalin altında. Kasa veya eşya almak için iyi bir fırsat. ${itemNote}`;
+            if (idx < 1.10) return `Piyasa dengeli. Alışveriş ve birikim için uygun bir an. ${itemNote}`;
+            if (idx < 1.60) return `Fiyatlar yükseliyor. Zorunlu olmayan alımları ertelemeyi düşünebilirsin. ${itemNote}`;
+            if (idx < 2.50) return `Pahalı dönem. Büyük harcamalar yapmadan önce iki kez düşün. ${itemNote}`;
+            return `Sert enflasyon. Harcamalarını kıs; piyasa düşene kadar biriktirmeye bak. ${itemNote}`;
         }
 
         const embed = createEmbed('inflation', `📈 Piyasa Durumu — ${mood}`, trend)
