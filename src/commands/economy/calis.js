@@ -25,6 +25,6 @@ module.exports = {
         await addMoney(interaction.user.id, reward, 'wallet');
         await pool.query('UPDATE economy_users SET last_work = CURRENT_TIMESTAMP, work_count = work_count + 1 WHERE user_id = $1', [interaction.user.id]);
 
-        await interaction.reply({ embeds: [createEmbed('success', '💼 Mesai Tamam', `${job} ve ${fmtMoney(reward)} kazandın.`)] });
+        await interaction.reply({ embeds: [createEmbed('reward', '💼 Mesai Tamam', `${job} ve ${fmtMoney(reward)} kazandın.`)] });
     }
 };

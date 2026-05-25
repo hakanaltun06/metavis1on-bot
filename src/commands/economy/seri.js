@@ -11,6 +11,6 @@ module.exports = {
             try { tag = (await interaction.client.users.fetch(res.rows[i].user_id)).username; } catch (e) { }
             desc += `🔥 **${res.rows[i].daily_streak} gün** — ${tag}\n`;
         }
-        await interaction.reply({ embeds: [createEmbed('info', '🔥 En Uzun Seriler', desc || 'Henüz aktif kimse yok.')] });
+        await interaction.reply({ embeds: [createEmbed('reward', '🔥 En Uzun Seriler', desc || 'Henüz aktif kimse yok.')] });
     }
 };

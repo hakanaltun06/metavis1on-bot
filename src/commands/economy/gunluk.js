@@ -28,7 +28,7 @@ module.exports = {
         await addMoney(interaction.user.id, totalReward, 'wallet');
         await pool.query('UPDATE economy_users SET daily_streak = $1, last_daily = CURRENT_TIMESTAMP WHERE user_id = $2', [newStreak, interaction.user.id]);
 
-        const embed = createEmbed('success', '🎁 Günlük Ödül', `Günün iyi geçsin. Cüzdanına para eklendi.`)
+        const embed = createEmbed('reward', '🎁 Günlük Ödül', `Günün iyi geçsin. Cüzdanına para eklendi.`)
             .addFields(
                 { name: 'Kazandığın', value: fmtMoney(totalReward), inline: true },
                 { name: 'Güncel Seri', value: `🔥 **${newStreak} gün** (+${streakBonus} bonus)`, inline: true }

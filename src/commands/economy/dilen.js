@@ -27,6 +27,6 @@ module.exports = {
         }
 
         await addMoney(interaction.user.id, outcome.reward, 'wallet');
-        await interaction.reply({ embeds: [createEmbed('success', '🤲 Bağış', `Yoldan geçen biri acıdı ve sana ${fmtMoney(outcome.reward)} verdi.`)] });
+        await interaction.reply({ embeds: [createEmbed('reward', '🤲 Bağış', `Yoldan geçen biri acıdı ve sana ${fmtMoney(outcome.reward)} verdi.`)] });
     }
 };

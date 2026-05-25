@@ -24,7 +24,7 @@ module.exports = {
         const outcome = rollCrime();
         if (outcome.win) {
             await addMoney(interaction.user.id, outcome.reward, 'wallet');
-            return interaction.reply({ embeds: [createEmbed('error', '🕵️ İş Bitti', `${outcome.scenario} ve kimseye yakalanmadan kaçtın.\nKazandığın: ${fmtMoney(outcome.reward)}`).setColor('#8B0000')] });
+            return interaction.reply({ embeds: [createEmbed('risk', '🕵️ İş Bitti', `${outcome.scenario} ve kimseye yakalanmadan kaçtın.\nKazandığın: ${fmtMoney(outcome.reward)}`)] });
         }
 
         const realPenalty = Math.min(outcome.penalty, Number(userData.wallet));

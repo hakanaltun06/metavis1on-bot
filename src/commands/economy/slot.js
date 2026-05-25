@@ -14,7 +14,7 @@ module.exports = {
     },
     async execute(interaction) {
         const amount = interaction.options.getInteger('miktar');
-        if (amount < SLOT_MIN_BET) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${SLOT_MIN_BET}.`)], flags: MessageFlags.Ephemeral });
+        if (amount < SLOT_MIN_BET) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${fmtMoney(SLOT_MIN_BET)}.`)], flags: MessageFlags.Ephemeral });
 
         const userData = await ensureUser(interaction.user.id);
         if (Number(userData.wallet) < amount) return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında yeterli paran yok.')], flags: MessageFlags.Ephemeral });

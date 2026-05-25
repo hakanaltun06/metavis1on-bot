@@ -37,11 +37,12 @@ module.exports = {
             if (result.kind === 'poor') {
                 return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', `Bu yükseltme için cüzdanında ${fmtMoney(result.cost)} olmalı.`)], flags: MessageFlags.Ephemeral });
             }
-            const embed = createEmbed('success', '🏦 Banka Yükseltildi', `Banka hesabın seviye **${result.newLevel}**'e çıktı.`)
+            const oldLevel = result.newLevel - 1;
+            const embed = createEmbed('bank', '🏦 Banka Yükseltildi', `Hesabın **${oldLevel}** → **${result.newLevel}** seviyesine çıktı.`)
                 .addFields(
                     { name: 'Önceki Kapasite', value: fmtMoney(result.oldLimit), inline: true },
                     { name: 'Yeni Kapasite', value: fmtMoney(result.newLimit), inline: true },
-                    { name: 'Ödediğin Ücret', value: fmtMoney(result.cost), inline: true }
+                    { name: 'Ödenen', value: fmtMoney(result.cost), inline: true }
                 );
             return interaction.reply({ embeds: [embed] });
         } catch (err) {

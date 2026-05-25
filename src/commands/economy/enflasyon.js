@@ -18,7 +18,7 @@ module.exports = {
         const trend = getPriceTrend(index);
         const effect = formatPriceEffect(index);
 
-        const embed = createEmbed('premium', `📈 Piyasa Durumu — ${mood}`, trend)
+        const embed = createEmbed('inflation', `📈 Piyasa Durumu — ${mood}`, trend)
             .addFields(
                 { name: 'Fiyat Etkisi', value: `**${effect}**`, inline: true },
                 { name: 'Denge Noktası', value: `${formatNumber(BASE_MONEY_SUPPLY)} ${CURRENCY_NAME} ${CURRENCY}`, inline: true },

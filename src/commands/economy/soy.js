@@ -5,7 +5,7 @@ const { checkItem, consumeItem } = require('../../database/inventory');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { getMins } = require('../../utils/time');
-const { CURRENCY_NAME, COOLDOWNS } = require('../../utils/constants');
+const { COOLDOWNS } = require('../../utils/constants');
 const {
     ROB_SELF_MIN_WALLET,
     ROB_TARGET_MIN_WALLET,
@@ -62,7 +62,7 @@ module.exports = {
                 return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Yeni bir plan kurmak için **${getMins(result.leftMs)} dk** beklemen gerek.`)], flags: MessageFlags.Ephemeral });
             }
             if (result.kind === 'self_poor') {
-                return interaction.reply({ embeds: [createEmbed('error', '❌ Cebin Boş', `Soygun planı için cüzdanında en az ${ROB_SELF_MIN_WALLET} ${CURRENCY_NAME} olmalı.`)], flags: MessageFlags.Ephemeral });
+                return interaction.reply({ embeds: [createEmbed('error', '❌ Cebin Boş', `Soygun planı için cüzdanında en az ${fmtMoney(ROB_SELF_MIN_WALLET)} olmalı.`)], flags: MessageFlags.Ephemeral });
             }
             if (result.kind === 'target_poor') {
                 return interaction.reply({ embeds: [createEmbed('error', '❌ Değmez', 'Hedefin cüzdanı çok zayıf. Buna değmez.')], flags: MessageFlags.Ephemeral });

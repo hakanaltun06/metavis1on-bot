@@ -118,7 +118,7 @@ function getLoanStatusText(loan) {
         case 'paid':      return 'Kapandı';
         case 'overdue':   return 'Gecikmiş';
         case 'active':    return 'Aktif';
-        case 'defaulted': return 'Karşılıksız';
+        case 'defaulted': return 'Sorunlu';
         default:          return loan.status;
     }
 }

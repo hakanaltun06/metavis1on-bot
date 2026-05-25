@@ -51,7 +51,13 @@ module.exports = {
             if (result.kind === 'no_money') {
                 return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', `Bu alışveriş için cüzdanında ${fmtMoney(result.cost)} olmalı.`)], flags: MessageFlags.Ephemeral });
             }
-            return interaction.reply({ embeds: [createEmbed('success', '🛍️ Satın Alma Tamam', `**${qty} adet ${item.name}** aldın.\nÖdediğin: ${fmtMoney(result.cost)}`)] });
+            const embed = createEmbed('market', '🛍️ Satın Alındı')
+                .addFields(
+                    { name: 'Eşya', value: `${item.name}`, inline: true },
+                    { name: 'Adet', value: `**${qty}**`, inline: true },
+                    { name: 'Ödenen', value: fmtMoney(result.cost), inline: true }
+                );
+            return interaction.reply({ embeds: [embed] });
         } catch (err) {
             console.error('Satınal hatası:', err && err.message ? err.message : err);
             return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });

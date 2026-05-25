@@ -15,7 +15,8 @@ module.exports = {
         rows.forEach(row => {
             const itemDef = findItemById(row.item_id);
             const name = itemDef ? itemDef.name : row.item_id;
-            embed.addFields({ name: `${name} (x${row.quantity})`, value: `Kod: \`${row.item_id}\``, inline: true });
+            const desc = itemDef && itemDef.desc ? `*${itemDef.desc}*` : `Kod: \`${row.item_id}\``;
+            embed.addFields({ name: `${name} (x${row.quantity})`, value: desc, inline: false });
         });
         await interaction.reply({ embeds: [embed] });
     }

@@ -3,11 +3,21 @@ const CURRENCY = "🪙";
 const CURRENCY_NAME = "MetaCoin";
 
 // Embed renkleri
-const COLOR_SUCCESS = "#00FF7F";
-const COLOR_ERROR = "#FF4500";
-const COLOR_INFO = "#1E90FF";
-const COLOR_WARNING = "#FFA500";
+const COLOR_SUCCESS = "#2ECC71";
+const COLOR_ERROR = "#E74C3C";
+const COLOR_INFO = "#3498DB";
+const COLOR_WARNING = "#F39C12";
 const COLOR_PREMIUM = "#FFD700";
+
+// Bağlama göre renkler — domain başına tutarlı görsel kimlik.
+const COLOR_BANK      = "#1F3A93"; // koyu mavi — banka
+const COLOR_MARKET    = "#9B59B6"; // mor — market
+const COLOR_CREDIT    = "#16A085"; // turkuaz — kredi
+const COLOR_ECONOMY   = "#F1C40F"; // altın — sunucu ekonomisi
+const COLOR_INFLATION = "#E67E22"; // turuncu — piyasa/enflasyon
+const COLOR_ADMIN     = "#34495E"; // koyu gri — yönetici
+const COLOR_RISK      = "#C0392B"; // koyu kırmızı — risk/kumar
+const COLOR_REWARD    = "#27AE60"; // yeşil — ödül
 
 // Banka seviyeleri
 const BANK_LEVELS = [
@@ -63,6 +73,14 @@ module.exports = {
     COLOR_INFO,
     COLOR_WARNING,
     COLOR_PREMIUM,
+    COLOR_BANK,
+    COLOR_MARKET,
+    COLOR_CREDIT,
+    COLOR_ECONOMY,
+    COLOR_INFLATION,
+    COLOR_ADMIN,
+    COLOR_RISK,
+    COLOR_REWARD,
     BANK_LEVELS,
     INTEREST_INTERVAL_MS,
     INTEREST_RATE,

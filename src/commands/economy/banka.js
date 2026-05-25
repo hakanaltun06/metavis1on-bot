@@ -37,7 +37,7 @@ module.exports = {
             ? `Puan: **${creditScore}** — Açık Borç: ${fmtMoney(loanSummary.activeDebt)}${loanSummary.overdueCount > 0 ? ` (gecikmiş: ${loanSummary.overdueCount})` : ''}`
             : `Puan: **${creditScore}** — Açık borç yok`;
 
-        const embed = createEmbed('info', `🏦 ${interaction.user.username} — Banka Hesabı`)
+        const embed = createEmbed('bank', `🏦 ${interaction.user.username} — Banka Hesabı`)
             .addFields(
                 { name: 'Cüzdandaki Para', value: fmtMoney(wallet), inline: true },
                 { name: 'Bankadaki Para', value: fmtMoney(bank), inline: true },

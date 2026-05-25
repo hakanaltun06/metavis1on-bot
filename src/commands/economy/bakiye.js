@@ -3,6 +3,7 @@ const { ensureUser } = require('../../database/users');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { BANK_LEVELS } = require('../../utils/constants');
+const { calculateFillPct } = require('../../services/bankService');
 
 module.exports = {
     data: {
@@ -15,17 +16,21 @@ module.exports = {
         if (target.bot) return interaction.reply({ embeds: [createEmbed('error', '❌ Olmaz', 'Botların bakiyesi olmaz.')], flags: MessageFlags.Ephemeral });
 
         const userData = await ensureUser(target.id);
-        const total = Number(userData.wallet) + Number(userData.bank);
+        const wallet = Number(userData.wallet);
+        const bank = Number(userData.bank);
+        const total = wallet + bank;
         const limit = Number(userData.bank_limit) || BANK_LEVELS[0].limit;
         const level = userData.bank_level || 1;
+        const fillPct = calculateFillPct(bank, limit);
 
         const embed = createEmbed('info', `💳 ${target.username} — Bakiye`)
             .addFields(
-                { name: 'Cüzdan', value: fmtMoney(userData.wallet), inline: true },
-                { name: 'Banka', value: `🏦 ${fmtMoney(userData.bank)}`, inline: true },
+                { name: 'Cüzdan', value: fmtMoney(wallet), inline: true },
+                { name: 'Banka', value: fmtMoney(bank), inline: true },
                 { name: 'Toplam Servet', value: fmtMoney(total), inline: false },
                 { name: 'Banka Seviyesi', value: `**${level}**`, inline: true },
-                { name: 'Banka Kapasitesi', value: fmtMoney(limit), inline: true }
+                { name: 'Kapasite', value: fmtMoney(limit), inline: true },
+                { name: 'Doluluk', value: `**%${fillPct}**`, inline: true }
             )
             .setThumbnail(target.displayAvatarURL());
         await interaction.reply({ embeds: [embed] });

@@ -16,7 +16,7 @@ module.exports = {
     },
     async execute(interaction) {
         const target = interaction.options.getUser('kullanici') || interaction.user;
-        if (target.bot) return interaction.reply({ content: 'Botların profili olmuyor.', flags: MessageFlags.Ephemeral });
+        if (target.bot) return interaction.reply({ embeds: [createEmbed('error', '❌ Olmaz', 'Botların profili olmaz.')], flags: MessageFlags.Ephemeral });
 
         // Hedef kendisi ise gecikmiş krediler sessizce yenilensin
         if (target.id === interaction.user.id) {

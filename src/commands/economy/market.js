@@ -17,7 +17,7 @@ module.exports = {
         const mood = getEconomyMood(index);
         const trend = getPriceTrend(index);
 
-        const embed = createEmbed('premium', `🛒 Market — ${mood}`, trend);
+        const embed = createEmbed('market', `🛒 Market — ${mood}`, trend);
 
         SHOP_ITEMS.forEach(item => {
             const dynamic = getDynamicPrice(item, index);

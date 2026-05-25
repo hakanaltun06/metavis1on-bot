@@ -37,7 +37,7 @@ module.exports = {
         const loanStats = await getServerLoanStats();
         const avgScore = await getAverageCreditScore();
 
-        const embed = createEmbed('info', '📊 Ekonomi Durumu')
+        const embed = createEmbed('economy', '📊 Ekonomi Durumu')
             .addFields(
                 { name: 'Kayıtlı Kullanıcı', value: `**${data.users}** kişi`, inline: true },
                 { name: 'Cüzdanlardaki Para', value: `${formatNumber(tw)} ${CURRENCY_NAME} ${CURRENCY}`, inline: true },

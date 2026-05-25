@@ -133,7 +133,7 @@ async function handleBilgi(interaction) {
         ? 'Kredi puanın düşük. Önce mevcut borçlarını toparlaman ve puanını yükseltmen gerekiyor.'
         : `Piyasa şu an **${mood.toLowerCase()}**; faiz oranı buna göre belirleniyor.`;
 
-    const embed = createEmbed('info', `📋 ${interaction.user.username} — Kredi Bilgisi`, note)
+    const embed = createEmbed('credit', `📋 ${interaction.user.username} — Kredi Bilgisi`, note)
         .addFields(
             { name: 'Kredi Puanı', value: `**${u.credit_score}** / 1000`, inline: true },
             { name: 'Risk Durumu', value: `**${tier.name}**`, inline: true },
@@ -239,7 +239,7 @@ async function handleAl(interaction) {
     }
 
     const ratePct = (outcome.rate * 100).toFixed(1);
-    const embed = createEmbed('success', '💳 Kredi Onaylandı',
+    const embed = createEmbed('credit', '💳 Kredi Alındı',
         `Tamamdır, ${fmtMoney(outcome.principal)} kredi cüzdanına yatırıldı.`)
         .addFields(
             { name: 'Geri Ödenecek Toplam', value: fmtMoney(outcome.totalDue), inline: true },
@@ -332,7 +332,7 @@ async function handleOde(interaction) {
     }
     if (outcome.kind === 'defaulted') {
         return interaction.reply({
-            embeds: [createEmbed('error', '💳 Kredi', 'Bu kredi karşılıksız olarak işaretlenmiş.')],
+            embeds: [createEmbed('error', '💳 Kredi', 'Bu kredi sorunlu olarak işaretlenmiş.')],
             flags: MessageFlags.Ephemeral
         });
     }
@@ -344,12 +344,12 @@ async function handleOde(interaction) {
     }
 
     if (outcome.closed) {
-        const embed = createEmbed('success', '✅ Borç Kapandı', `Borç kapandı. Kredi puanın **+${outcome.scoreDelta}** yükseldi.`)
+        const embed = createEmbed('credit', '✅ Borç Kapandı', `Borç kapandı. Kredi puanın **+${outcome.scoreDelta}** yükseldi.`)
             .addFields({ name: 'Bu Ödeme', value: fmtMoney(outcome.paid), inline: true });
         return interaction.reply({ embeds: [embed] });
     }
 
-    const embed = createEmbed('success', '💳 Ödeme Alındı', `Ödeme alındı. Kalan borcun: ${fmtMoney(outcome.remaining)}`)
+    const embed = createEmbed('credit', '💳 Ödeme Alındı', `Ödeme alındı. Kalan borcun: ${fmtMoney(outcome.remaining)}`)
         .addFields(
             { name: 'Bu Ödeme', value: fmtMoney(outcome.paid), inline: true },
             { name: 'Kredi Numarası', value: `**#${interaction.options.getInteger('kredi')}**`, inline: true }
@@ -368,7 +368,7 @@ async function handleListele(interaction) {
         });
     }
 
-    const embed = createEmbed('info', `💳 ${interaction.user.username} — Son Kredilerin`,
+    const embed = createEmbed('credit', `💳 ${interaction.user.username} — Kredilerin`,
         'En fazla son 5 kredin görünüyor.');
     for (const loan of loans) {
         const status = getLoanStatusText(loan);
@@ -404,7 +404,7 @@ async function handlePuan(interaction) {
         ? `${fmtMoney(summary.activeDebt)}${summary.overdueCount > 0 ? ` (gecikmiş: ${summary.overdueCount})` : ''}`
         : 'Yok';
 
-    const embed = createEmbed('info', `📊 ${interaction.user.username} — Kredi Puanı`, yorum)
+    const embed = createEmbed('credit', `📊 ${interaction.user.username} — Kredi Puanı`, yorum)
         .addFields(
             { name: 'Kredi Puanı', value: `**${u.credit_score}** / 1000`, inline: true },
             { name: 'Risk Durumu', value: `**${tier.name}**`, inline: true },

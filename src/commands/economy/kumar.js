@@ -20,11 +20,11 @@ module.exports = {
     },
     async execute(interaction) {
         const amount = interaction.options.getInteger('miktar');
-        if (amount < GAMBLE_MIN_BET) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${GAMBLE_MIN_BET}.`)], flags: MessageFlags.Ephemeral });
+        if (amount < GAMBLE_MIN_BET) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${fmtMoney(GAMBLE_MIN_BET)}.`)], flags: MessageFlags.Ephemeral });
 
         const userData = await ensureUser(interaction.user.id);
         if (Number(userData.wallet) < amount) {
-            return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', `Cüzdanında ${fmtMoney(amount)} yok.`)], flags: MessageFlags.Ephemeral });
+            return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında yeterli paran yok.')], flags: MessageFlags.Ephemeral });
         }
 
         const hasAmulet = await checkItem(interaction.user.id, 'lucky_amulet');

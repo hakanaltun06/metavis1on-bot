@@ -60,7 +60,7 @@ module.exports = {
             }
 
             const note = result.wasCapped ? '\nBankan dolduğu için faizin sadece sığan kısmı eklendi.' : '';
-            return interaction.reply({ embeds: [createEmbed('success', '🏦 Faiz İşlendi', `Bankana ${fmtMoney(result.credited)} eklendi.${note}`)] });
+            return interaction.reply({ embeds: [createEmbed('bank', '🏦 Faiz İşlendi', `Bankana ${fmtMoney(result.credited)} eklendi.${note}`)] });
         } catch (err) {
             console.error('Faiz hatası:', err && err.message ? err.message : err);
             return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Faiz işlenirken bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });

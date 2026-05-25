@@ -12,6 +12,6 @@ module.exports = {
         if (!checkAdmin(interaction)) return;
         const target = interaction.options.getUser('kullanici');
         await adminResetUser(target.id);
-        return interaction.reply({ embeds: [createEmbed('success', '🧹 Sıfırlandı', `${target.username} kullanıcısının tüm verisi silindi.`)] });
+        return interaction.reply({ embeds: [createEmbed('admin', '🧹 Sıfırlandı', `${target.username} kullanıcısının tüm verisi silindi.`)] });
     }
 };

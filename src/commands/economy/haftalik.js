@@ -19,6 +19,6 @@ module.exports = {
         const reward = REWARDS.WEEKLY;
         await addMoney(interaction.user.id, reward, 'wallet');
         await pool.query('UPDATE economy_users SET last_weekly = CURRENT_TIMESTAMP WHERE user_id = $1', [interaction.user.id]);
-        await interaction.reply({ embeds: [createEmbed('success', '🗓️ Haftalık Ödül', `${fmtMoney(reward)} cüzdanına eklendi.`)] });
+        await interaction.reply({ embeds: [createEmbed('reward', '🗓️ Haftalık Ödül', `${fmtMoney(reward)} cüzdanına eklendi.`)] });
     }
 };

@@ -17,6 +17,6 @@ module.exports = {
         const target = interaction.options.getUser('kullanici');
         const amount = interaction.options.getInteger('miktar');
         await adminRemoveMoney(interaction.user.id, target.id, amount);
-        return interaction.reply({ embeds: [createEmbed('success', '✅ Tamamdır', `${target.username} hesabından ${fmtMoney(amount)} silindi.`)] });
+        return interaction.reply({ embeds: [createEmbed('admin', '✅ Tamamdır', `${target.username} hesabından ${fmtMoney(amount)} silindi.`)] });
     }
 };
