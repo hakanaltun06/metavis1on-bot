@@ -31,14 +31,29 @@ module.exports = {
                 if (amount > room) return { kind: 'over', room };
 
                 await moveWalletToBank(interaction.user.id, amount, db);
-                return { kind: 'ok', amount };
+                return {
+                    kind: 'ok',
+                    amount,
+                    newWallet: wallet - amount,
+                    newBank: bank + amount,
+                    newRoom: room - amount
+                };
             });
 
             if (result.kind === 'invalid') return interaction.reply({ embeds: [createEmbed('error', '❌ Geçersiz Miktar', 'Geçerli bir sayı yaz.')], flags: MessageFlags.Ephemeral });
             if (result.kind === 'no_wallet') return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında bu kadar para yok.')], flags: MessageFlags.Ephemeral });
             if (result.kind === 'full') return interaction.reply({ embeds: [createEmbed('warn', '🏦 Banka Dolu', 'Bankanda yer kalmamış. Kapasiteni artırman gerekiyor. `/banka-yukselt` ile seviyeni yükseltebilirsin.')], flags: MessageFlags.Ephemeral });
             if (result.kind === 'over') return interaction.reply({ embeds: [createEmbed('warn', '🏦 Yer Yetersiz', `Bankanda sadece ${fmtMoney(result.room)} kadar yer var. Daha fazlasını yatırabilmek için kapasiteni artır.`)], flags: MessageFlags.Ephemeral });
-            return interaction.reply({ embeds: [createEmbed('bank', '🏦 Bankaya Yatırıldı', `${fmtMoney(result.amount)} bankaya geçti.`)] });
+
+            const embed = createEmbed('bank', '🏦 Bankaya Yatırıldı', 'MetaCoin bankana aktarıldı.')
+                .addFields(
+                    { name: 'Yatırılan', value: fmtMoney(result.amount), inline: true },
+                    { name: 'Yeni Cüzdan', value: fmtMoney(result.newWallet), inline: true },
+                    { name: 'Yeni Banka', value: fmtMoney(result.newBank), inline: true },
+                    { name: 'Kalan Kapasite', value: fmtMoney(result.newRoom), inline: true }
+                )
+                .setFooter({ text: 'Faiz kazanmak için paranı bankada tutabilirsin.' });
+            return interaction.reply({ embeds: [embed] });
         } catch (err) {
             console.error('Yatır hatası:', err && err.message ? err.message : err);
             return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });

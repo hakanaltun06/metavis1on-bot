@@ -16,6 +16,7 @@ module.exports = {
         try {
             const result = await withTx(async (db) => {
                 const u = await ensureUser(interaction.user.id, db);
+                const wallet = Number(u.wallet);
                 const bank = Number(u.bank);
                 const isAll = amountStr === 'hepsi' || amountStr === 'all';
                 let amount = isAll ? bank : parseInt(amountStr);
@@ -24,12 +25,20 @@ module.exports = {
                 if (bank < amount) return { kind: 'no_bank' };
 
                 await moveBankToWallet(interaction.user.id, amount, db);
-                return { kind: 'ok', amount };
+                return { kind: 'ok', amount, newWallet: wallet + amount, newBank: bank - amount };
             });
 
             if (result.kind === 'invalid') return interaction.reply({ embeds: [createEmbed('error', '❌ Geçersiz Miktar', 'Geçerli bir sayı yaz.')], flags: MessageFlags.Ephemeral });
             if (result.kind === 'no_bank') return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Bankanda bu kadar para yok.')], flags: MessageFlags.Ephemeral });
-            return interaction.reply({ embeds: [createEmbed('bank', '🏦 Para Çekildi', `${fmtMoney(result.amount)} cüzdanına geçti.`)] });
+
+            const embed = createEmbed('bank', '🏦 Bankadan Çekildi', 'MetaCoin cüzdanına aktarıldı.')
+                .addFields(
+                    { name: 'Çekilen', value: fmtMoney(result.amount), inline: true },
+                    { name: 'Yeni Cüzdan', value: fmtMoney(result.newWallet), inline: true },
+                    { name: 'Yeni Banka', value: fmtMoney(result.newBank), inline: true }
+                )
+                .setFooter({ text: 'Banka durumunu görmek için /banka kullan.' });
+            return interaction.reply({ embeds: [embed] });
         } catch (err) {
             console.error('Çek hatası:', err && err.message ? err.message : err);
             return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });

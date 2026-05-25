@@ -70,14 +70,15 @@ module.exports = {
 
                 const totalValue = rareItem.sellValue * qty;
 
-                await db.query(
-                    'UPDATE economy_users SET wallet = wallet + $1, total_earned = total_earned + $1 WHERE user_id = $2',
+                const updRes = await db.query(
+                    'UPDATE economy_users SET wallet = wallet + $1, total_earned = total_earned + $1 WHERE user_id = $2 RETURNING wallet',
                     [totalValue, interaction.user.id]
                 );
+                const newWallet = Number(updRes.rows[0].wallet);
 
                 await logTransaction(interaction.user.id, null, 'sell_item', totalValue, `${qty}x ${rareItem.name} satildi`, db);
 
-                return { kind: 'ok', totalValue };
+                return { kind: 'ok', totalValue, newWallet };
             });
 
             if (result.kind === 'no_item') {
@@ -95,9 +96,13 @@ module.exports = {
                 ? `**1** adet ${emoji} ${rareItem.name} sattın.`
                 : `**${qty}** adet ${emoji} ${rareItem.name} sattın.`;
 
-            const embed = createEmbed('reward', '💰 Eşya Satıldı', desc);
-            embed.addFields({ name: 'Kazanç', value: fmtMoney(result.totalValue), inline: true });
-            embed.setFooter({ text: 'Kalan eşyalarını /envanter ile görebilirsin.' });
+            const embed = createEmbed('reward', '💰 Eşya Satıldı', desc)
+                .addFields(
+                    { name: 'Birim Değer', value: fmtMoney(rareItem.sellValue), inline: true },
+                    { name: 'Toplam Kazanç', value: fmtMoney(result.totalValue), inline: true },
+                    { name: 'Yeni Cüzdan', value: fmtMoney(result.newWallet), inline: true }
+                )
+                .setFooter({ text: 'Kalan eşyalarını /envanter ile görebilirsin.' });
 
             return interaction.reply({ embeds: [embed] });
 

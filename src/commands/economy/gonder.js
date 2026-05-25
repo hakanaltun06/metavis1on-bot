@@ -32,11 +32,19 @@ module.exports = {
                 await removeFromWalletPlain(interaction.user.id, amount, db);
                 await addToWalletPlain(target.id, amount, db);
                 await logTransaction(interaction.user.id, target.id, 'transfer', amount, 'Kullanıcıdan kullanıcıya transfer', db);
-                return { kind: 'ok' };
+                return { kind: 'ok', newWallet: Number(sender.wallet) - amount };
             });
 
             if (result.kind === 'no_money') return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında yeterli paran yok.')], flags: MessageFlags.Ephemeral });
-            return interaction.reply({ embeds: [createEmbed('success', '💸 Para Gönderildi', `**${target.username}** kişisine ${fmtMoney(amount)} gönderdin.`)] });
+
+            const embed = createEmbed('success', '💸 Transfer Tamamlandı', 'MetaCoin gönderildi.')
+                .addFields(
+                    { name: 'Alıcı', value: target.username, inline: true },
+                    { name: 'Gönderilen', value: fmtMoney(amount), inline: true },
+                    { name: 'Yeni Cüzdanın', value: fmtMoney(result.newWallet), inline: true }
+                )
+                .setFooter({ text: 'Bakiye durumunu görmek için /bakiye kullan.' });
+            return interaction.reply({ embeds: [embed] });
         } catch (err) {
             console.error('Gönder hatası:', err && err.message ? err.message : err);
             return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'İşlem sırasında bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });
