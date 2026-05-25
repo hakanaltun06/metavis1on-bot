@@ -4,7 +4,7 @@ const { ensureUser } = require('../../database/users');
 const { applyInterest } = require('../../database/bank');
 const { logTransaction } = require('../../database/transactions');
 const { createEmbed } = require('../../utils/embeds');
-const { fmtMoney } = require('../../utils/format');
+const { fmtMoney, formatFull } = require('../../utils/format');
 const { BANK_LEVELS } = require('../../utils/constants');
 const {
     INTEREST_RATE,
@@ -41,7 +41,7 @@ module.exports = {
                 await applyInterest(interaction.user.id, credited, db);
                 await logTransaction(interaction.user.id, null, 'interest', credited, 'Faiz kazancı', db);
 
-                return { kind: 'ok', credited, wasCapped };
+                return { kind: 'ok', credited, wasCapped, oldBank: bank, newBank: bank + credited, limit };
             });
 
             if (result.kind === 'no_balance') {
@@ -59,8 +59,21 @@ module.exports = {
                 return interaction.reply({ embeds: [createEmbed('warn', '🏦 Banka Dolu', 'Bankan dolu olduğu için faiz eklenemedi. Kapasiteni artırman gerekiyor.')], flags: MessageFlags.Ephemeral });
             }
 
-            const note = result.wasCapped ? '\nBankan dolduğu için faizin sadece sığan kısmı eklendi.' : '';
-            return interaction.reply({ embeds: [createEmbed('bank', '🏦 Faiz İşlendi', `Bankana ${fmtMoney(result.credited)} eklendi.${note}`)] });
+            const pct = (INTEREST_RATE * 100).toFixed(0);
+            const desc = result.wasCapped
+                ? 'Bankan kapasiteye yakın olduğu için faizin bir kısmı eklenebildi.'
+                : 'Bankadaki paran üzerinden faiz kazandın.';
+            const embed = createEmbed('bank', '🏦 Faiz İşlendi', desc)
+                .addFields(
+                    { name: 'Kazanılan Faiz', value: fmtMoney(result.credited), inline: true },
+                    { name: 'Eski Banka', value: fmtMoney(result.oldBank), inline: true },
+                    { name: 'Yeni Banka', value: fmtMoney(result.newBank), inline: true },
+                    { name: 'Kapasite', value: `${formatFull(result.newBank)} / ${formatFull(result.limit)} MetaCoin 🪙`, inline: true },
+                    { name: 'Faiz Oranı', value: `**%${pct}**`, inline: true },
+                    { name: 'Sonraki Faiz', value: '12 saat sonra', inline: true }
+                )
+                .setFooter({ text: 'Kapasiten doluyorsa /banka-yukselt ile bankanı büyütebilirsin.' });
+            return interaction.reply({ embeds: [embed] });
         } catch (err) {
             console.error('Faiz hatası:', err && err.message ? err.message : err);
             return interaction.reply({ embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Faiz işlenirken bir sorun çıktı. Biraz sonra tekrar dener misin?')], flags: MessageFlags.Ephemeral });

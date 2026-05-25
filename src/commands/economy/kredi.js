@@ -188,6 +188,7 @@ async function handleAl(interaction) {
         const finalRate = calculateFinalLoanRate(u.credit_score, inflationIndex, term.surcharge);
         const totalDue = calculateTotalDue(principal, finalRate);
         const dueAt = calculateDueDate(term.days);
+        const walletBefore = Number(u.wallet) || 0;
 
         // Cüzdana krediyi ekle (sadece nakit kaydı; kazanç sayılmaz, total_earned ARTIRMA)
         await db.query(
@@ -204,7 +205,8 @@ async function handleAl(interaction) {
             dueAt,
             rate: finalRate,
             term,
-            loanId: loan.id
+            loanId: loan.id,
+            newWallet: walletBefore + principal
         };
     });
 
@@ -240,16 +242,17 @@ async function handleAl(interaction) {
     }
 
     const ratePct = (outcome.rate * 100).toFixed(1);
-    const embed = createEmbed('credit', '💳 Kredi Alındı',
-        `Tamamdır, ${fmtMoney(outcome.principal)} kredi cüzdanına yatırıldı.`)
+    const embed = createEmbed('credit', '💳 Kredi Alındı', 'Kredi cüzdanına yatırıldı.')
         .addFields(
+            { name: 'Alınan Tutar', value: fmtMoney(outcome.principal), inline: true },
             { name: 'Geri Ödenecek Toplam', value: fmtMoney(outcome.totalDue), inline: true },
             { name: 'Faiz Oranı', value: `**%${ratePct}**`, inline: true },
             { name: 'Vade', value: outcome.term.label, inline: true },
-            { name: 'Son Ödeme', value: formatDateTime(outcome.dueAt), inline: false },
-            { name: 'Kredi Numarası', value: `**#${outcome.loanId}**`, inline: true }
+            { name: 'Son Ödeme', value: formatDateTime(outcome.dueAt), inline: true },
+            { name: 'Kredi Numarası', value: `**#${outcome.loanId}**`, inline: true },
+            { name: 'Yeni Cüzdan', value: fmtMoney(outcome.newWallet), inline: true }
         )
-        .setFooter({ text: 'Borcunu zamanında ödersen kredi puanın yükselir.' });
+        .setFooter({ text: 'Borçlarını zamanında ödersen kredi puanın güçlenir.' });
     return interaction.reply({ embeds: [embed] });
 }
 
@@ -310,7 +313,7 @@ async function handleOde(interaction) {
         await logTransaction(interaction.user.id, null, 'loan_pay', payable,
             `Kredi ödeme — #${loanId}${closed ? ' (kapandı)' : ''}`, db);
 
-        return { kind: 'ok', paid: payable, remaining: newRemaining, closed, scoreDelta };
+        return { kind: 'ok', paid: payable, oldRemaining: remaining, remaining: newRemaining, closed, scoreDelta, newWallet: wallet - payable };
     });
 
     if (outcome.kind === 'not_found') {
@@ -345,16 +348,29 @@ async function handleOde(interaction) {
     }
 
     if (outcome.closed) {
-        const embed = createEmbed('credit', '✅ Borç Kapandı', `Borç kapandı. Kredi puanın **+${outcome.scoreDelta}** yükseldi.`)
-            .addFields({ name: 'Bu Ödeme', value: fmtMoney(outcome.paid), inline: true });
+        const embed = createEmbed('credit', '✅ Borç Kapandı', 'Kredi borcun tamamen kapandı.')
+            .addFields(
+                { name: 'Ödenen', value: fmtMoney(outcome.paid), inline: true },
+                { name: 'Kapanan Borç', value: fmtMoney(outcome.oldRemaining), inline: true },
+                { name: 'Yeni Cüzdan', value: fmtMoney(outcome.newWallet), inline: true },
+                { name: 'Puan Değişimi', value: `**+${outcome.scoreDelta}**`, inline: true }
+            )
+            .setFooter({ text: 'Düzenli ödeme, kredi limitini zamanla yükseltir.' });
         return interaction.reply({ embeds: [embed] });
     }
 
-    const embed = createEmbed('credit', '💳 Ödeme Alındı', `Ödeme alındı. Kalan borcun: ${fmtMoney(outcome.remaining)}`)
+    const scoreField = outcome.scoreDelta !== 0
+        ? [{ name: 'Puan Değişimi', value: `**+${outcome.scoreDelta}**`, inline: true }]
+        : [];
+    const embed = createEmbed('credit', '💳 Ödeme Alındı', 'Kredi borcuna ödeme işlendi.')
         .addFields(
-            { name: 'Bu Ödeme', value: fmtMoney(outcome.paid), inline: true },
-            { name: 'Kredi Numarası', value: `**#${interaction.options.getInteger('kredi')}**`, inline: true }
-        );
+            { name: 'Ödenen', value: fmtMoney(outcome.paid), inline: true },
+            { name: 'Eski Borç', value: fmtMoney(outcome.oldRemaining), inline: true },
+            { name: 'Yeni Borç', value: fmtMoney(outcome.remaining), inline: true },
+            { name: 'Yeni Cüzdan', value: fmtMoney(outcome.newWallet), inline: true },
+            ...scoreField
+        )
+        .setFooter({ text: 'Borcu tamamen kapatırsan kredi puanın daha fazla yükselir.' });
     return interaction.reply({ embeds: [embed] });
 }
 
