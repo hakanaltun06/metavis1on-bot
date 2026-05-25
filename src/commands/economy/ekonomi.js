@@ -56,7 +56,7 @@ module.exports = {
             .addFields(
                 { name: 'Kayıtlı Kullanıcı', value: `**${data.users}** kişi`, inline: true },
                 { name: 'Cüzdanlardaki Para', value: `${formatNumber(tw)} ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
-                { name: 'Bankalardaki Para', value: `🏦 ${formatNumber(tb)} ${CURRENCY_NAME}`, inline: true },
+                { name: 'Bankalardaki Para', value: `🏦 ${formatNumber(tb)} ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: 'Toplam Servet', value: `**${formatNumber(totalMoney)}** ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: 'Toplam Faiz Kazancı', value: `${formatNumber(tInt)} ${CURRENCY_NAME}`, inline: true },
                 { name: 'Banka Seviyesi', value: `Ortalama **${avgLvl.toFixed(2)}** — En yüksek **${maxLvl}**`, inline: true },
