@@ -58,11 +58,11 @@ module.exports = {
                 { name: 'Cüzdanlardaki Para', value: `${formatNumber(tw)} ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: 'Bankalardaki Para', value: `🏦 ${formatNumber(tb)} ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: 'Toplam Servet', value: `**${formatNumber(totalMoney)}** ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
-                { name: 'Toplam Faiz Kazancı', value: `${formatNumber(tInt)} ${CURRENCY_NAME}`, inline: true },
+                { name: 'Toplam Faiz Kazancı', value: `${formatNumber(tInt)} ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: 'Banka Seviyesi', value: `Ortalama **${avgLvl.toFixed(2)}** — En yüksek **${maxLvl}**`, inline: true },
                 { name: 'Piyasa Durumu', value: `**${mood}**\n*${getMoodComment(index)}*`, inline: true },
                 { name: 'Fiyat Etkisi', value: `**${effect}**`, inline: true },
-                { name: 'Kredi Durumu', value: `Aktif: **${loanStats.activeCount}** — Açık Borç: **${formatNumber(loanStats.activeDebt)}** ${CURRENCY_NAME}\nOrtalama Puan: **${avgScore.toFixed(0)}**`, inline: false }
+                { name: 'Kredi Durumu', value: `Aktif: **${loanStats.activeCount}** — Açık Borç: **${formatNumber(loanStats.activeDebt)}** ${CURRENCY_NAME} ${CURRENCY}\nOrtalama Puan: **${avgScore.toFixed(0)}**`, inline: false }
             );
         if (crateOpens > 0) {
             embed.addFields({ name: '📦 Kasa Sistemi', value: `Açılan: **${formatNumber(crateOpens)}** kasa\nDağıtılan: **${formatNumber(crateCoins)}** ${CURRENCY_NAME}`, inline: true });
