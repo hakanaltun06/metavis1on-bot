@@ -14,8 +14,8 @@ module.exports = {
     },
     async execute(interaction) {
         if (!requireOwner(interaction)) return;
-        const target  = interaction.options.getUser('kullanici');
-        const onayla  = interaction.options.getBoolean('onayla');
+        const target = interaction.options.getUser('kullanici');
+        const onayla = interaction.options.getBoolean('onayla');
 
         if (!onayla) {
             return interaction.reply({
@@ -27,11 +27,20 @@ module.exports = {
             });
         }
 
-        await adminResetUser(interaction.user.id, target.id);
-        return interaction.reply({
-            embeds: [createEmbed('admin', '🧹 Sıfırlandı',
-                `${target.username} kullanıcısının tüm ekonomi verisi silindi. İşlem güvenlik kaydına işlendi.`)],
-            flags: MessageFlags.Ephemeral
-        });
+        try {
+            await adminResetUser(interaction.user.id, target.id);
+            return interaction.reply({
+                embeds: [createEmbed('admin', '🧹 Sıfırlandı',
+                    `**${target.username}** kullanıcısının ekonomi verileri ve aktif kayıtları temizlendi. İşlem güvenlik kaydına işlendi.`)],
+                flags: MessageFlags.Ephemeral
+            });
+        } catch (err) {
+            console.error('Ekonomi sıfırlama hatası:', err && err.message ? err.message : err);
+            return interaction.reply({
+                embeds: [createEmbed('error', '⚠️ Sıfırlama Tamamlanamadı',
+                    'Kullanıcının ekonomi verileri sıfırlanırken bir sorun oluştu.\n\nHiçbir teknik detay kanala yansıtılmadı. Lütfen logları kontrol edip tekrar dene.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
     }
 };
