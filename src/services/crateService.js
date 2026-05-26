@@ -56,18 +56,38 @@ const CRATE_TYPES = [
 ];
 
 const RARE_ITEMS = [
-    { code: 'parlak_jeton', name: 'Parlak Jeton', rarity: 'siradan', sellValue: 3000 },
-    { code: 'eski_rozet', name: 'Eski Rozet', rarity: 'siradan', sellValue: 4000 },
-    { code: 'sansli_pul', name: 'Şanslı Pul', rarity: 'siradan', sellValue: 5000 },
-    { code: 'neon_kart', name: 'Neon Kart', rarity: 'ender', sellValue: 18000 },
-    { code: 'altin_anahtar', name: 'Altın Anahtar', rarity: 'ender', sellValue: 25000 },
+    // --- Sıradan ---
+    { code: 'parlak_jeton',       name: 'Parlak Jeton',       rarity: 'siradan', sellValue: 3000 },
+    { code: 'eski_rozet',         name: 'Eski Rozet',         rarity: 'siradan', sellValue: 4000 },
+    { code: 'sansli_pul',         name: 'Şanslı Pul',         rarity: 'siradan', sellValue: 5000 },
+    { code: 'kirik_usb',          name: 'Kırık USB Bellek',   rarity: 'siradan', sellValue: 3500 },
+    { code: 'eski_veri_karti',    name: 'Eski Veri Kartı',    rarity: 'siradan', sellValue: 4500 },
+    { code: 'bakir_devre_parcasi',name: 'Bakır Devre Parçası',rarity: 'siradan', sellValue: 5500 },
+    { code: 'neon_sticker',       name: 'Neon Sticker',       rarity: 'siradan', sellValue: 6000 },
+    // --- Ender ---
+    { code: 'neon_kart',          name: 'Neon Kart',          rarity: 'ender', sellValue: 18000 },
+    { code: 'altin_anahtar',      name: 'Altın Anahtar',      rarity: 'ender', sellValue: 25000 },
     { code: 'gizli_marka_rozeti', name: 'Gizli Marka Rozeti', rarity: 'ender', sellValue: 35000 },
-    { code: 'kristal_cekirdek', name: 'Kristal Çekirdek', rarity: 'epik', sellValue: 80000 },
-    { code: 'meta_muhru', name: 'Meta Mührü', rarity: 'epik', sellValue: 120000 },
-    { code: 'siyah_kart', name: 'Siyah Kart', rarity: 'epik', sellValue: 160000 },
-    { code: 'sentinel_taci', name: 'Sentinel Tacı', rarity: 'efsanevi', sellValue: 350000 },
-    { code: 'metavis1on_parcasi', name: 'metavis1on Parçası', rarity: 'efsanevi', sellValue: 500000 },
-    { code: 'sonsuzluk_rozeti', name: 'Sonsuzluk Rozeti', rarity: 'efsanevi', sellValue: 750000 }
+    { code: 'sifreli_bellek',     name: 'Şifreli Bellek',     rarity: 'ender', sellValue: 20000 },
+    { code: 'guvenlik_anahtari',  name: 'Güvenlik Anahtarı',  rarity: 'ender', sellValue: 28000 },
+    { code: 'mavi_devre_karti',   name: 'Mavi Devre Kartı',   rarity: 'ender', sellValue: 32000 },
+    { code: 'veri_rozeti',        name: 'Veri Rozeti',        rarity: 'ender', sellValue: 40000 },
+    // --- Epik ---
+    { code: 'kristal_cekirdek',   name: 'Kristal Çekirdek',   rarity: 'epik', sellValue: 80000 },
+    { code: 'meta_muhru',         name: 'Meta Mührü',         rarity: 'epik', sellValue: 120000 },
+    { code: 'siyah_kart',         name: 'Siyah Kart',         rarity: 'epik', sellValue: 160000 },
+    { code: 'kuantum_cip',        name: 'Kuantum Çip',        rarity: 'epik', sellValue: 90000 },
+    { code: 'neon_anahtar_karti', name: 'Neon Anahtar Kartı', rarity: 'epik', sellValue: 110000 },
+    { code: 'sentinel_modulu',    name: 'Sentinel Modülü',    rarity: 'epik', sellValue: 145000 },
+    { code: 'meta_kristali',      name: 'Meta Kristali',      rarity: 'epik', sellValue: 175000 },
+    // --- Efsanevi ---
+    { code: 'sentinel_taci',         name: 'Sentinel Tacı',         rarity: 'efsanevi', sellValue: 350000 },
+    { code: 'metavis1on_parcasi',    name: 'metavis1on Parçası',    rarity: 'efsanevi', sellValue: 500000 },
+    { code: 'sonsuzluk_rozeti',      name: 'Sonsuzluk Rozeti',      rarity: 'efsanevi', sellValue: 750000 },
+    { code: 'altin_guvenlik_karti',  name: 'Altın Güvenlik Kartı',  rarity: 'efsanevi', sellValue: 380000 },
+    { code: 'siyah_kasa_cekirdegi',  name: 'Siyah Kasa Çekirdeği',  rarity: 'efsanevi', sellValue: 560000 },
+    { code: 'metavis1on_cekirdegi',  name: 'metavis1on Çekirdeği',  rarity: 'efsanevi', sellValue: 650000 },
+    { code: 'dijital_tac',           name: 'Dijital Taç',           rarity: 'efsanevi', sellValue: 820000 }
 ];
 
 const RARITY_INFO = {
