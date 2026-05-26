@@ -30,7 +30,7 @@ const CRATE_TYPES = [
     },
     {
         code: 'siber_kasa',
-        name: '🔷 Siber Kasa',
+        name: '🔷 Nexus Kasa',
         desc: 'Siber güvenlik temalı orta seviye kasa. Ender eşya çıkma ihtimali yüksek.',
         basePrice: 85000,
         volatility: 1.15,

@@ -18,8 +18,11 @@ const { grantCappedPoints } = require('../../services/seasonService');
 const CRATE_SEASON_POINTS = {
     basit_kasa: 5,
     nadir_kasa: 15,
+    siber_kasa: 22,
     epik_kasa: 35,
-    efsanevi_kasa: 90
+    neon_kasa: 55,
+    efsanevi_kasa: 90,
+    prestij_kasa: 120
 };
 
 module.exports = {
