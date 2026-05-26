@@ -11,6 +11,15 @@ const ITEM_TYPE_LABELS = {
     flex:       'Prestij'
 };
 
+const ITEM_AUTOCOMPLETE_LABELS = {
+    energy_drink:     'Çalışma & suç beklemesini sıfırlar',
+    odak_kahvesi:     'Çalışma beklemesini sıfırlar',
+    risk_cipi:        'Suç beklemesini sıfırlar',
+    kasa_anahtari:    'Özel eşya',
+    profil_cercevesi: 'Prestij',
+    kara_kart:        'Prestij',
+};
+
 module.exports = {
     data: {
         name: 'kullan',
@@ -28,7 +37,7 @@ module.exports = {
                 .map(row => {
                     const def = findItem(row.item_id);
                     if (!def) return null;
-                    const typeLabel = ITEM_TYPE_LABELS[def.type] || 'Eşya';
+                    const typeLabel = ITEM_AUTOCOMPLETE_LABELS[def.id] || ITEM_TYPE_LABELS[def.type] || 'Eşya';
                     return {
                         name: `${def.name} ×${row.quantity} — ${typeLabel}`,
                         value: def.id
@@ -85,6 +94,27 @@ module.exports = {
                     flags: MessageFlags.Ephemeral
                 });
             }
+            if (itemId === 'kasa_anahtari') {
+                return interaction.reply({
+                    embeds: [createEmbed('info', '🗝️ Kasa Anahtarı',
+                        'Bu eşya özel kasa ve etkinlik sistemleri için saklanır. Şu an doğrudan kullanılmaz ve tüketilmedi.')],
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+            if (itemId === 'profil_cercevesi') {
+                return interaction.reply({
+                    embeds: [createEmbed('info', '🖼️ Neon Profil Çerçevesi',
+                        'Bu bir prestij profil çerçevesidir. Görsel değer taşır ve envanterde durduğu sürece profiline yansır. Doğrudan kullanılmaz.')],
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+            if (itemId === 'kara_kart') {
+                return interaction.reply({
+                    embeds: [createEmbed('info', '🖤 Kara Kart',
+                        'Bu yüksek bir prestij eşyasıdır. Koleksiyon değeri taşır ve doğrudan kullanılmaz.')],
+                    flags: MessageFlags.Ephemeral
+                });
+            }
             return interaction.reply({
                 embeds: [createEmbed('info', '🔒 Kullanılamaz',
                     'Bu eşya doğrudan kullanılmaz. Envanterinde durduğu sürece açıklamasındaki etki veya prestij bilgisi geçerlidir.')],
@@ -103,6 +133,24 @@ module.exports = {
                 )
                 .setFooter({ text: 'Eşyalarını görmek için /envanter kullan.' });
             return interaction.reply({ embeds: [embed] });
+        }
+
+        if (itemId === 'odak_kahvesi') {
+            await pool.query('UPDATE economy_users SET last_work = NULL WHERE user_id = $1', [interaction.user.id]);
+            await consumeItem(interaction.user.id, itemId, 1);
+            return interaction.reply({
+                embeds: [createEmbed('success', '☕ Odak Kahvesi İçildi',
+                    'Çalışma bekleme süren sıfırlandı. Artık tekrar `/calis` kullanabilirsin.')]
+            });
+        }
+
+        if (itemId === 'risk_cipi') {
+            await pool.query('UPDATE economy_users SET last_crime = NULL WHERE user_id = $1', [interaction.user.id]);
+            await consumeItem(interaction.user.id, itemId, 1);
+            return interaction.reply({
+                embeds: [createEmbed('success', '🎲 Risk Çipi Kullanıldı',
+                    'Suç bekleme süren sıfırlandı. Artık tekrar `/suc` deneyebilirsin.')]
+            });
         }
 
         return interaction.reply({

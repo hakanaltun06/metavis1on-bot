@@ -64,7 +64,12 @@ const SHOP_ITEMS = [
     { id: 'rob_shield', name: '🛡️ Soygun Kalkanı', desc: 'Seni bir soygundan korur. (Pasif)', price: 15000, type: 'passive', volatility: 1.0 },
     { id: 'lucky_amulet', name: '🍀 Şans Tılsımı', desc: 'Kumar oyunlarında şansını %5 artırır. (Pasif)', price: 50000, type: 'passive', volatility: 1.2 },
     { id: 'energy_drink', name: '⚡ Enerji İçeceği', desc: 'Çalışma ve suç bekleme sürelerini anında sıfırlar. (Kullanılabilir)', price: 7500, type: 'consumable', volatility: 0.85 },
-    { id: 'vip_badge', name: '💎 VIP Rozeti', desc: 'Profili süsler, prestij göstergesidir.', price: 500000, type: 'flex', volatility: 1.3 }
+    { id: 'vip_badge',          name: '💎 VIP Rozeti',             desc: 'Profili süsler, prestij göstergesidir.',                                  price: 500000, type: 'flex',       volatility: 1.3  },
+    { id: 'odak_kahvesi',       name: '☕ Odak Kahvesi',           desc: 'Çalışma bekleme süresini anında sıfırlar. (Kullanılabilir)',               price: 4500,   type: 'consumable', volatility: 0.80 },
+    { id: 'risk_cipi',          name: '🎲 Risk Çipi',              desc: 'Suç bekleme süresini anında sıfırlar. (Kullanılabilir)',                   price: 8500,   type: 'consumable', volatility: 0.85 },
+    { id: 'kasa_anahtari',      name: '🗝️ Kasa Anahtarı',         desc: 'Özel kasa/etkinlik sistemleri için saklanır. Şu an doğrudan kullanılmaz.', price: 35000,  type: 'flex',       volatility: 1.0  },
+    { id: 'profil_cercevesi',   name: '🖼️ Neon Profil Çerçevesi', desc: 'Neon temalı prestij profil çerçevesi. Görsel eşya.',                      price: 150000, type: 'flex',       volatility: 1.2  },
+    { id: 'kara_kart',          name: '🖤 Kara Kart',              desc: 'Yüksek seviye prestij eşyası. Koleksiyon değeri taşır.',                   price: 750000, type: 'flex',       volatility: 1.3  }
 ];
 
 module.exports = {
