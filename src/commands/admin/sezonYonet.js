@@ -215,8 +215,11 @@ async function handleBitir(interaction) {
 
 function formatItemName(itemId) {
     const names = {
+        prestij_kasa:  'Prestij Kasa',
         efsanevi_kasa: 'Efsanevi Kasa',
+        neon_kasa:     'Neon Kasa',
         epik_kasa:     'Epik Kasa',
+        nexus_kasa:    'Nexus Kasa',
         nadir_kasa:    'Nadir Kasa',
         basit_kasa:    'Basit Kasa'
     };

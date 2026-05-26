@@ -439,22 +439,34 @@ function buildSeasonRewardPlan(users) {
         let rewards = [];
         if (rank === 1) {
             tier = '1. sıra';
-            rewards = [{ itemId: 'efsanevi_kasa', quantity: 3 }];
+            rewards = [
+                { itemId: 'prestij_kasa',   quantity: 1 },
+                { itemId: 'efsanevi_kasa',  quantity: 2 }
+            ];
         } else if (rank === 2) {
             tier = '2. sıra';
-            rewards = [{ itemId: 'efsanevi_kasa', quantity: 2 }];
+            rewards = [
+                { itemId: 'prestij_kasa',   quantity: 1 },
+                { itemId: 'efsanevi_kasa',  quantity: 1 }
+            ];
         } else if (rank === 3) {
             tier = '3. sıra';
-            rewards = [{ itemId: 'efsanevi_kasa', quantity: 1 }];
+            rewards = [
+                { itemId: 'neon_kasa',      quantity: 1 },
+                { itemId: 'efsanevi_kasa',  quantity: 1 }
+            ];
         } else if (rank >= 4 && rank <= 10) {
             tier = '4-10. sıra';
-            rewards = [{ itemId: 'epik_kasa', quantity: 2 }];
+            rewards = [
+                { itemId: 'neon_kasa',      quantity: 1 },
+                { itemId: 'epik_kasa',      quantity: 1 }
+            ];
         } else if (level >= 3) {
             tier = 'Seviye 3+';
-            rewards = [{ itemId: 'nadir_kasa', quantity: 1 }];
+            rewards = [{ itemId: 'nexus_kasa', quantity: 1 }];
         } else if (level === 2) {
             tier = 'Seviye 2';
-            rewards = [{ itemId: 'basit_kasa', quantity: 1 }];
+            rewards = [{ itemId: 'nadir_kasa', quantity: 1 }];
         }
         if (rewards.length > 0) {
             plan.push({ userId: user.user_id, rank, points: Number(user.points), level, tier, rewards });

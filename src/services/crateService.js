@@ -29,9 +29,9 @@ const CRATE_TYPES = [
         ]
     },
     {
-        code: 'siber_kasa',
+        code: 'nexus_kasa',
         name: '🔷 Nexus Kasa',
-        desc: 'Siber güvenlik temalı orta seviye kasa. Ender eşya çıkma ihtimali yüksek.',
+        desc: 'Nadir ve epik koleksiyonlar arasında dengeli, dijital prestij odaklı özel kasa.',
         basePrice: 85000,
         volatility: 1.15,
         rewards: [
@@ -136,13 +136,21 @@ const RARITY_INFO = {
     efsanevi: { label: 'Efsanevi', emoji: '🟡', colorType: 'premium' }
 };
 
+const LEGACY_CRATE_ALIASES = { 'siber_kasa': 'nexus_kasa' };
+
 function getCrateTypes() { return CRATE_TYPES; }
-function getCrateByCode(code) { return CRATE_TYPES.find(c => c.code === code) || null; }
+function getCrateByCode(code) {
+    const resolved = LEGACY_CRATE_ALIASES[code] || code;
+    return CRATE_TYPES.find(c => c.code === resolved) || null;
+}
 function getRareItems() { return RARE_ITEMS; }
 function getRareItemByCode(code) { return RARE_ITEMS.find(i => i.code === code) || null; }
 function getSellableItemByCode(code) { return RARE_ITEMS.find(i => i.code === code) || null; }
 
-function isCrateItem(code) { return CRATE_TYPES.some(c => c.code === code); }
+function isCrateItem(code) {
+    const resolved = LEGACY_CRATE_ALIASES[code] || code;
+    return CRATE_TYPES.some(c => c.code === resolved);
+}
 function isRareItem(code) { return RARE_ITEMS.some(i => i.code === code); }
 function isSellableItem(code) { return RARE_ITEMS.some(i => i.code === code); }
 

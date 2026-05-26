@@ -17,32 +17,32 @@ function getRemainingText(endsAt) {
 const REWARD_TIERS = [
     {
         name: '🥇 1. Sıra',
-        value: '3× Efsanevi Kasa',
+        value: '1× Prestij Kasa + 2× Efsanevi Kasa',
         inline: false
     },
     {
         name: '🥈 2. Sıra',
-        value: '2× Efsanevi Kasa',
+        value: '1× Prestij Kasa + 1× Efsanevi Kasa',
         inline: false
     },
     {
         name: '🥉 3. Sıra',
-        value: '1× Efsanevi Kasa',
+        value: '1× Neon Kasa + 1× Efsanevi Kasa',
         inline: false
     },
     {
         name: '🏅 4.–10. Sıra',
-        value: '2× Epik Kasa',
+        value: '1× Neon Kasa + 1× Epik Kasa',
         inline: false
     },
     {
         name: '⭐ Seviye 3 ve Üstü',
-        value: '1× Nadir Kasa',
+        value: '1× Nexus Kasa',
         inline: true
     },
     {
         name: '📦 Seviye 2',
-        value: '1× Basit Kasa',
+        value: '1× Nadir Kasa',
         inline: true
     }
 ];

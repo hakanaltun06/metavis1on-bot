@@ -16,13 +16,14 @@ const {
 const { grantCappedPoints } = require('../../services/seasonService');
 
 const CRATE_SEASON_POINTS = {
-    basit_kasa: 5,
-    nadir_kasa: 15,
-    siber_kasa: 22,
-    epik_kasa: 35,
-    neon_kasa: 55,
+    basit_kasa:    5,
+    nadir_kasa:    15,
+    nexus_kasa:    22,
+    siber_kasa:    22,
+    epik_kasa:     35,
+    neon_kasa:     55,
     efsanevi_kasa: 90,
-    prestij_kasa: 120
+    prestij_kasa:  120
 };
 
 module.exports = {
@@ -56,7 +57,7 @@ module.exports = {
                 .map(row => {
                     const crate = getCrateByCode(row.item_id);
                     if (!crate) return null;
-                    return { name: `${crate.name} ×${row.quantity}`, value: crate.code };
+                    return { name: `${crate.name} ×${row.quantity}`, value: row.item_id };
                 })
                 .filter(Boolean)
                 .filter(opt => opt.name.toLowerCase().includes(focused));
