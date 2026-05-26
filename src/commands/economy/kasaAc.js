@@ -1,13 +1,14 @@
 const { MessageFlags } = require('discord.js');
 const { withTx } = require('../../database/tx');
 const { ensureUser } = require('../../database/users');
-const { checkItem, addItem, safeConsumeItem } = require('../../database/inventory');
+const { checkItem, addItem, safeConsumeItem, getInventory } = require('../../database/inventory');
 const { logTransaction } = require('../../database/transactions');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney, formatFull } = require('../../utils/format');
 const { CURRENCY, CURRENCY_NAME } = require('../../utils/constants');
 const {
     getCrateByCode,
+    isCrateItem,
     rollCrate,
     getRarityLabel,
     getRarityEmoji
@@ -28,15 +29,10 @@ module.exports = {
         options: [
             {
                 name: 'kasa',
-                description: 'Açmak istediğin kasanın türü.',
+                description: 'Açmak istediğin kasayı seç.',
                 type: 3,
                 required: true,
-                choices: [
-                    { name: 'Basit Kasa', value: 'basit_kasa' },
-                    { name: 'Nadir Kasa', value: 'nadir_kasa' },
-                    { name: 'Epik Kasa', value: 'epik_kasa' },
-                    { name: 'Efsanevi Kasa', value: 'efsanevi_kasa' }
-                ]
+                autocomplete: true
             },
             {
                 name: 'adet',
@@ -47,6 +43,24 @@ module.exports = {
                 max_value: 5
             }
         ]
+    },
+    async autocomplete(interaction) {
+        try {
+            const focused = interaction.options.getFocused().toLowerCase();
+            const inventory = await getInventory(interaction.user.id);
+            const results = inventory
+                .filter(row => row.quantity > 0 && isCrateItem(row.item_id))
+                .map(row => {
+                    const crate = getCrateByCode(row.item_id);
+                    if (!crate) return null;
+                    return { name: `${crate.name} ×${row.quantity}`, value: crate.code };
+                })
+                .filter(Boolean)
+                .filter(opt => opt.name.toLowerCase().includes(focused));
+            await interaction.respond(results.slice(0, 25));
+        } catch {
+            await interaction.respond([]);
+        }
     },
     async execute(interaction) {
         const crateCode = interaction.options.getString('kasa');
