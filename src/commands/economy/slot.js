@@ -23,7 +23,7 @@ module.exports = {
 
         const hasAmulet = await checkItem(interaction.user.id, 'lucky_amulet');
         const spin = rollSlot();
-        const slotString = `[ ${spin.reels[0]} | ${spin.reels[1]} | ${spin.reels[2]} ]`;
+        const slotResult = `[ ${spin.reels[0]} | ${spin.reels[1]} | ${spin.reels[2]} ]`;
 
         // Tılsım varsa tam kayıp durumunda %10 ihtimalle bahis iadesi
         const amuletSaved = hasAmulet > 0 && spin.multiplier === 0 && Math.random() < 0.10;
@@ -38,8 +38,9 @@ module.exports = {
         }
 
         if (amuletSaved) {
-            const savedEmbed = createEmbed('info', '🎰 Slot Makinesi', `\n> ${slotString}\n\n🍀 **Tılsım devreye girdi!**`)
+            const savedEmbed = createEmbed('info', '🎰 Şans Tılsımı Devreye Girdi')
                 .addFields(
+                    { name: 'Sonuç', value: slotResult, inline: false },
                     { name: 'Bahis', value: fmtMoney(amount), inline: true },
                     { name: 'İade', value: fmtMoney(amount), inline: true },
                     { name: 'Cüzdan', value: fmtMoney(Number(userData.wallet)), inline: true }
@@ -55,14 +56,15 @@ module.exports = {
             const profit = Math.floor(amount * spin.multiplier) - amount;
             const newWallet = Number(userData.wallet) + profit;
             await addMoney(interaction.user.id, profit, 'wallet');
-            const winEmbed = createEmbed('premium', '🎰 Slot Makinesi', `\n> ${slotString}\n\n🎉 **Kazandın!**`)
+            const winEmbed = createEmbed('premium', '🎰 Makine Ödeme Yaptı')
                 .addFields(
+                    { name: 'Sonuç', value: slotResult, inline: false },
                     { name: 'Bahis', value: fmtMoney(amount), inline: true },
                     { name: 'Çarpan', value: `**${spin.multiplier}x**`, inline: true },
                     { name: 'Kazanç', value: fmtMoney(profit), inline: true },
                     { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
                 )
-                .setFooter({ text: hasAmulet > 0 ? '🍀 Şans Tılsımı aktif. | Bakiyeni kontrol etmeyi unutma.' : 'Daha fazla denemeden önce bakiyeni kontrol etmeyi unutma.' });
+                .setFooter({ text: hasAmulet > 0 ? '🍀 Şans Tılsımı aktif.' : 'Bakiyeni kontrol etmek için /bakiye kullan.' });
             if (seasonGrant && seasonGrant.granted > 0) {
                 winEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
@@ -71,13 +73,14 @@ module.exports = {
 
         const newWallet = Number(userData.wallet) - amount;
         await removeMoney(interaction.user.id, amount, 'wallet');
-        const loseEmbed = createEmbed('error', '🎰 Slot Makinesi', `\n> ${slotString}\n\n💀 **Kaybettin.**`)
+        const loseEmbed = createEmbed('error', '🎰 Makine Bu Tur Sessiz Kaldı')
             .addFields(
+                { name: 'Sonuç', value: slotResult, inline: false },
                 { name: 'Bahis', value: fmtMoney(amount), inline: true },
                 { name: 'Kayıp', value: fmtMoney(amount), inline: true },
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
             )
-            .setFooter({ text: hasAmulet > 0 ? '🍀 Şans Tılsımı aktif — Tılsım bu sefer kaybı engelleyemedi.' : 'Daha fazla denemeden önce bakiyeni kontrol etmeyi unutma.' });
+            .setFooter({ text: hasAmulet > 0 ? '🍀 Şans Tılsımı aktifti ama bu tur yetmedi.' : 'Bakiyeni kontrol etmek için /bakiye kullan.' });
         if (seasonGrant && seasonGrant.granted > 0) {
             loseEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }

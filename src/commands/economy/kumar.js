@@ -41,34 +41,39 @@ module.exports = {
         }
 
         const win = Math.random() < finalChance;
-        const chanceText = hasAmulet > 0
-            ? `🍀 Şans Tılsımı aktif — Kazanma şansın: %${(finalChance * 100).toFixed(0)}`
-            : `Kazanma şansın: %${(finalChance * 100).toFixed(0)}`;
+
         if (win) {
             const profit = Math.floor(amount * GAMBLE_WIN_MULTIPLIER) - amount;
             const newWallet = Number(userData.wallet) + profit;
             await addMoney(interaction.user.id, profit, 'wallet');
-            const winEmbed = createEmbed('success', '🎲 Kazandın', 'Zarlar lehine geldi.')
+            const winEmbed = createEmbed('success', '🎲 Risk Tuttu', 'Bahsini katladın.')
                 .addFields(
                     { name: 'Bahis', value: fmtMoney(amount), inline: true },
                     { name: 'Kazanç', value: fmtMoney(profit), inline: true },
                     { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
                 )
-                .setFooter({ text: chanceText });
+                .setFooter({ text: 'Bakiyeni kontrol etmek için /bakiye kullan.' });
+            if (hasAmulet > 0) {
+                winEmbed.addFields({ name: '🍀 Şans Tılsımı', value: 'Aktif — kazanma şansın biraz arttı.', inline: true });
+            }
             if (seasonGrant && seasonGrant.granted > 0) {
                 winEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
             return interaction.reply({ embeds: [winEmbed] });
         }
+
         const newWallet = Number(userData.wallet) - amount;
         await removeMoney(interaction.user.id, amount, 'wallet');
-        const loseEmbed = createEmbed('error', '🎲 Kaybettin', 'Zar kötü düştü.')
+        const loseEmbed = createEmbed('error', '🎲 Bu Tur Şans Yoktu', 'Zar bu sefer dönmedi.')
             .addFields(
                 { name: 'Bahis', value: fmtMoney(amount), inline: true },
                 { name: 'Kayıp', value: fmtMoney(amount), inline: true },
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
             )
-            .setFooter({ text: chanceText });
+            .setFooter({ text: 'Bakiyeni kontrol etmek için /bakiye kullan.' });
+        if (hasAmulet > 0) {
+            loseEmbed.addFields({ name: '🍀 Şans Tılsımı', value: 'Aktif — ama bu tur şans dönemedi.', inline: true });
+        }
         if (seasonGrant && seasonGrant.granted > 0) {
             loseEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }

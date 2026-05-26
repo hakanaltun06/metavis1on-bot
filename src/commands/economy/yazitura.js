@@ -40,36 +40,40 @@ module.exports = {
 
         const choiceLabel = choice === 'yazi' ? 'Yazı' : 'Tura';
         const resultLabel = result === 'yazi' ? 'Yazı' : 'Tura';
-        const footerText = hasAmulet > 0
-            ? '🍀 Şans Tılsımı aktif — Şansın az da olsa artıyor.'
-            : 'Şans oyunlarında bütçeni kontrol etmek için /bakiye kullan.';
 
         if (win) {
             const newWallet = Number(userData.wallet) + amount;
             await addMoney(interaction.user.id, amount, 'wallet');
-            const winEmbed = createEmbed('success', '🪙 Para Döndü', `Para **${resultLabel}** geldi.`)
+            const winEmbed = createEmbed('success', '🪙 Tahminin Tuttu', `Para **${resultLabel}** geldi.`)
                 .addFields(
                     { name: 'Seçimin', value: choiceLabel, inline: true },
                     { name: 'Sonuç', value: `${resultLabel} ✅`, inline: true },
                     { name: 'Kazanç', value: fmtMoney(amount), inline: true },
                     { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
                 )
-                .setFooter({ text: footerText });
+                .setFooter({ text: 'Bakiyeni kontrol etmek için /bakiye kullan.' });
+            if (hasAmulet > 0) {
+                winEmbed.addFields({ name: '🍀 Şans Tılsımı', value: 'Aktif — tahmin şansın biraz arttı.', inline: true });
+            }
             if (seasonGrant && seasonGrant.granted > 0) {
                 winEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
             return interaction.reply({ embeds: [winEmbed] });
         }
+
         const newWallet = Number(userData.wallet) - amount;
         await removeMoney(interaction.user.id, amount, 'wallet');
-        const loseEmbed = createEmbed('error', '🪙 Para Döndü', `Para **${resultLabel}** geldi.`)
+        const loseEmbed = createEmbed('error', '🪙 Para Diğer Yüzünü Gösterdi', `Para **${resultLabel}** geldi.`)
             .addFields(
                 { name: 'Seçimin', value: choiceLabel, inline: true },
                 { name: 'Sonuç', value: `${resultLabel} ❌`, inline: true },
                 { name: 'Kayıp', value: fmtMoney(amount), inline: true },
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
             )
-            .setFooter({ text: footerText });
+            .setFooter({ text: 'Bakiyeni kontrol etmek için /bakiye kullan.' });
+        if (hasAmulet > 0) {
+            loseEmbed.addFields({ name: '🍀 Şans Tılsımı', value: 'Aktif — ama bu tur şans dönemedi.', inline: true });
+        }
         if (seasonGrant && seasonGrant.granted > 0) {
             loseEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }
