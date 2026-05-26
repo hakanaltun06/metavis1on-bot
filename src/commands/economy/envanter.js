@@ -78,7 +78,7 @@ module.exports = {
             );
         }
 
-        embed.setFooter({ text: 'Eşya: /kullan · Kasa: /kasa-ac · Satış: /sat' });
+        embed.setFooter({ text: 'Kullanılabilir eşyalar için /kullan · Kasalar için /kasa-ac · Koleksiyon satışı için /sat' });
         await interaction.reply({ embeds: [embed] });
     }
 };
