@@ -29,6 +29,20 @@ const CRATE_TYPES = [
         ]
     },
     {
+        code: 'siber_kasa',
+        name: '🔷 Siber Kasa',
+        desc: 'Siber güvenlik temalı orta seviye kasa. Ender eşya çıkma ihtimali yüksek.',
+        basePrice: 85000,
+        volatility: 1.15,
+        rewards: [
+            { type: 'coin', rarity: null, weight: 28, min: 12000, max: 55000 },
+            { type: 'item', rarity: 'siradan', weight: 10 },
+            { type: 'item', rarity: 'ender', weight: 42 },
+            { type: 'item', rarity: 'epik', weight: 18 },
+            { type: 'item', rarity: 'efsanevi', weight: 2 }
+        ]
+    },
+    {
         code: 'epik_kasa',
         name: '✨ Epik Kasa',
         desc: 'Ciddi ödül ihtimali olan yüksek seviye kasa.',
@@ -42,6 +56,19 @@ const CRATE_TYPES = [
         ]
     },
     {
+        code: 'neon_kasa',
+        name: '💠 Neon Kasa',
+        desc: 'Neon teknoloji temalı yüksek seviye kasa. Epik eşya ağırlıklı, düşük efsanevi ihtimali.',
+        basePrice: 275000,
+        volatility: 1.25,
+        rewards: [
+            { type: 'coin', rarity: null, weight: 22, min: 40000, max: 160000 },
+            { type: 'item', rarity: 'ender', weight: 8 },
+            { type: 'item', rarity: 'epik', weight: 48 },
+            { type: 'item', rarity: 'efsanevi', weight: 22 }
+        ]
+    },
+    {
         code: 'efsanevi_kasa',
         name: '🏆 Efsanevi Kasa',
         desc: 'En yüksek ödül ihtimaline sahip pahalı kasa.',
@@ -51,6 +78,18 @@ const CRATE_TYPES = [
             { type: 'coin', rarity: null, weight: 20, min: 80000, max: 350000 },
             { type: 'item', rarity: 'epik', weight: 50 },
             { type: 'item', rarity: 'efsanevi', weight: 30 }
+        ]
+    },
+    {
+        code: 'prestij_kasa',
+        name: '👑 Prestij Kasa',
+        desc: 'Premium koleksiyon kasası. Efsanevi eşya ihtimali en yüksek kasadır.',
+        basePrice: 900000,
+        volatility: 1.35,
+        rewards: [
+            { type: 'coin', rarity: null, weight: 15, min: 120000, max: 550000 },
+            { type: 'item', rarity: 'epik', weight: 47 },
+            { type: 'item', rarity: 'efsanevi', weight: 38 }
         ]
     }
 ];
