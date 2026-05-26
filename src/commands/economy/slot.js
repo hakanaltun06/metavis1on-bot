@@ -2,6 +2,7 @@ const { MessageFlags } = require('discord.js');
 const { pool } = require('../../database/pool');
 const { ensureUser } = require('../../database/users');
 const { addMoney, removeMoney } = require('../../database/money');
+const { checkItem } = require('../../database/inventory');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { SLOT_MIN_BET, rollSlot } = require('../../services/gamblingService');
@@ -20,8 +21,12 @@ module.exports = {
         const userData = await ensureUser(interaction.user.id);
         if (Number(userData.wallet) < amount) return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında yeterli paran yok.')], flags: MessageFlags.Ephemeral });
 
+        const hasAmulet = await checkItem(interaction.user.id, 'lucky_amulet');
         const spin = rollSlot();
         const slotString = `[ ${spin.reels[0]} | ${spin.reels[1]} | ${spin.reels[2]} ]`;
+
+        // Tılsım varsa tam kayıp durumunda %10 ihtimalle bahis iadesi
+        const amuletSaved = hasAmulet > 0 && spin.multiplier === 0 && Math.random() < 0.10;
 
         await pool.query('UPDATE economy_users SET gamble_count = gamble_count + 1 WHERE user_id = $1', [interaction.user.id]);
 
@@ -30,6 +35,20 @@ module.exports = {
             seasonGrant = await grantCappedPoints(interaction.user.id, 'gambling', 3, 20);
         } catch (err) {
             console.error('Sezon puanı eklenemedi (slot):', err?.message);
+        }
+
+        if (amuletSaved) {
+            const savedEmbed = createEmbed('info', '🎰 Slot Makinesi', `\n> ${slotString}\n\n🍀 **Tılsım devreye girdi!**`)
+                .addFields(
+                    { name: 'Bahis', value: fmtMoney(amount), inline: true },
+                    { name: 'İade', value: fmtMoney(amount), inline: true },
+                    { name: 'Cüzdan', value: fmtMoney(Number(userData.wallet)), inline: true }
+                )
+                .setFooter({ text: 'Şans Tılsımı aktif — Kayıp önlendi, bahisin iade edildi.' });
+            if (seasonGrant && seasonGrant.granted > 0) {
+                savedEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            }
+            return interaction.reply({ embeds: [savedEmbed] });
         }
 
         if (spin.multiplier > 0) {
@@ -43,12 +62,13 @@ module.exports = {
                     { name: 'Kazanç', value: fmtMoney(profit), inline: true },
                     { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
                 )
-                .setFooter({ text: 'Daha fazla denemeden önce bakiyeni kontrol etmeyi unutma.' });
+                .setFooter({ text: hasAmulet > 0 ? '🍀 Şans Tılsımı aktif. | Bakiyeni kontrol etmeyi unutma.' : 'Daha fazla denemeden önce bakiyeni kontrol etmeyi unutma.' });
             if (seasonGrant && seasonGrant.granted > 0) {
                 winEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
             return interaction.reply({ embeds: [winEmbed] });
         }
+
         const newWallet = Number(userData.wallet) - amount;
         await removeMoney(interaction.user.id, amount, 'wallet');
         const loseEmbed = createEmbed('error', '🎰 Slot Makinesi', `\n> ${slotString}\n\n💀 **Kaybettin.**`)
@@ -57,7 +77,7 @@ module.exports = {
                 { name: 'Kayıp', value: fmtMoney(amount), inline: true },
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
             )
-            .setFooter({ text: 'Daha fazla denemeden önce bakiyeni kontrol etmeyi unutma.' });
+            .setFooter({ text: hasAmulet > 0 ? '🍀 Şans Tılsımı aktif — Tılsım bu sefer kaybı engelleyemedi.' : 'Daha fazla denemeden önce bakiyeni kontrol etmeyi unutma.' });
         if (seasonGrant && seasonGrant.granted > 0) {
             loseEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }

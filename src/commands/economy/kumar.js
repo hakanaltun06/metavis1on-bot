@@ -41,7 +41,9 @@ module.exports = {
         }
 
         const win = Math.random() < finalChance;
-        const chanceText = `Kazanma şansın: %${(finalChance * 100).toFixed(0)}`;
+        const chanceText = hasAmulet > 0
+            ? `🍀 Şans Tılsımı aktif — Kazanma şansın: %${(finalChance * 100).toFixed(0)}`
+            : `Kazanma şansın: %${(finalChance * 100).toFixed(0)}`;
         if (win) {
             const profit = Math.floor(amount * GAMBLE_WIN_MULTIPLIER) - amount;
             const newWallet = Number(userData.wallet) + profit;

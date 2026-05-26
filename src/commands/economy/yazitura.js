@@ -2,9 +2,10 @@ const { MessageFlags } = require('discord.js');
 const { pool } = require('../../database/pool');
 const { ensureUser } = require('../../database/users');
 const { addMoney, removeMoney } = require('../../database/money');
+const { checkItem } = require('../../database/inventory');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
-const { COINFLIP_MIN_BET, rollCoinflip } = require('../../services/gamblingService');
+const { COINFLIP_MIN_BET, applyAmuletBonus } = require('../../services/gamblingService');
 const { grantCappedPoints } = require('../../services/seasonService');
 
 module.exports = {
@@ -23,8 +24,10 @@ module.exports = {
         const userData = await ensureUser(interaction.user.id);
         if (Number(userData.wallet) < amount) return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında yeterli paran yok.')], flags: MessageFlags.Ephemeral });
 
-        const result = rollCoinflip();
-        const win = choice === result;
+        const hasAmulet = await checkItem(interaction.user.id, 'lucky_amulet');
+        const finalChance = applyAmuletBonus(0.5, hasAmulet > 0);
+        const win = Math.random() < finalChance;
+        const result = win ? choice : (choice === 'yazi' ? 'tura' : 'yazi');
 
         await pool.query('UPDATE economy_users SET gamble_count = gamble_count + 1 WHERE user_id = $1', [interaction.user.id]);
 
@@ -37,6 +40,9 @@ module.exports = {
 
         const choiceLabel = choice === 'yazi' ? 'Yazı' : 'Tura';
         const resultLabel = result === 'yazi' ? 'Yazı' : 'Tura';
+        const footerText = hasAmulet > 0
+            ? '🍀 Şans Tılsımı aktif — Şansın az da olsa artıyor.'
+            : 'Şans oyunlarında bütçeni kontrol etmek için /bakiye kullan.';
 
         if (win) {
             const newWallet = Number(userData.wallet) + amount;
@@ -48,7 +54,7 @@ module.exports = {
                     { name: 'Kazanç', value: fmtMoney(amount), inline: true },
                     { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
                 )
-                .setFooter({ text: 'Şans oyunlarında bütçeni kontrol etmek için /bakiye kullan.' });
+                .setFooter({ text: footerText });
             if (seasonGrant && seasonGrant.granted > 0) {
                 winEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
@@ -63,7 +69,7 @@ module.exports = {
                 { name: 'Kayıp', value: fmtMoney(amount), inline: true },
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
             )
-            .setFooter({ text: 'Şans oyunlarında bütçeni kontrol etmek için /bakiye kullan.' });
+            .setFooter({ text: footerText });
         if (seasonGrant && seasonGrant.granted > 0) {
             loseEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }
