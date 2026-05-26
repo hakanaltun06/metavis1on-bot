@@ -13,8 +13,16 @@ const { getCrateTypes, calculateCrateDynamicPrice } = require('../../services/cr
 function buildPriceEffectLine(current, base) {
     const pct = Math.round((current / base - 1) * 100);
     if (Math.abs(pct) <= 1) return '→ Normal fiyat';
-    if (pct > 0) return `↗ %${pct} pahalı · Temel: ${formatFull(base)} ${CURRENCY_NAME} ${CURRENCY}`;
-    return `↘ %${Math.abs(pct)} ucuz · Temel: ${formatFull(base)} ${CURRENCY_NAME} ${CURRENCY}`;
+    if (pct > 0) return `↗ %${pct} pahalı`;
+    return `↘ %${Math.abs(pct)} ucuz`;
+}
+
+function buildItemLines(items, index) {
+    return items.map(item => {
+        const dynamic = getDynamicPrice(item, index);
+        const effect = buildPriceEffectLine(dynamic, Number(item.price));
+        return `**${item.name}** — ${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY}\n${item.desc} · *${effect}*`;
+    }).join('\n\n');
 }
 
 module.exports = {
@@ -27,30 +35,25 @@ module.exports = {
 
         const embed = createEmbed('market', `🛒 Market — ${mood}`, trend);
 
-        SHOP_ITEMS.forEach(item => {
-            const dynamic = getDynamicPrice(item, index);
-            const base = Number(item.price);
-            const effectLine = buildPriceEffectLine(dynamic, base);
-            embed.addFields({
-                name: `${item.name} — ${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY}`,
-                value: `${effectLine}\nKod: \`${item.id}\`\n*${item.desc}*`,
-                inline: false
-            });
-        });
+        const consumables = SHOP_ITEMS.filter(i => i.type === 'consumable');
+        const passives    = SHOP_ITEMS.filter(i => i.type === 'passive');
+        const flex        = SHOP_ITEMS.filter(i => i.type === 'flex');
 
-        embed.addFields({ name: '​', value: '**📦 Kasalar**', inline: false });
-        getCrateTypes().forEach(crate => {
+        embed.addFields(
+            { name: '⚡ Kullanılabilir Eşyalar', value: buildItemLines(consumables, index), inline: false },
+            { name: '🛡️ Pasif Avantajlar',       value: buildItemLines(passives, index),    inline: false },
+            { name: '💎 Prestij ve Özel',         value: buildItemLines(flex, index),        inline: false }
+        );
+
+        const crateLines = getCrateTypes().map(crate => {
             const dynamic = calculateCrateDynamicPrice(crate, index);
-            const base = crate.basePrice;
-            const effectLine = buildPriceEffectLine(dynamic, base);
-            embed.addFields({
-                name: `${crate.name} — ${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY}`,
-                value: `${effectLine}\nKod: \`${crate.code}\`\n*${crate.desc}*`,
-                inline: false
-            });
-        });
+            const effect = buildPriceEffectLine(dynamic, crate.basePrice);
+            return `**${crate.name}** — ${formatFull(dynamic)} ${CURRENCY_NAME} ${CURRENCY}\n${crate.desc} · *${effect}*`;
+        }).join('\n\n');
 
-        embed.setFooter({ text: 'Satın almak için /satinal · Eşyaların için /envanter · Kasalar için /kasa-ac' });
+        embed.addFields({ name: '📦 Kasalar', value: crateLines, inline: false });
+
+        embed.setFooter({ text: 'Satın almak için /satinal · Kullanılabilir eşyalar için /kullan · Kasalar için /kasa-ac · Fiyatlar ekonomiye göre değişebilir.' });
         await interaction.reply({ embeds: [embed] });
     }
 };
