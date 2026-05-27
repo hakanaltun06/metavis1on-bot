@@ -388,7 +388,7 @@ async function handleOde(interaction) {
             )
             .setFooter({ text: 'Düzenli ödeme, kredi limitini zamanla yükseltir.' });
         if (seasonGrant && seasonGrant.granted > 0) {
-            embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            embed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }
         return interaction.reply({ embeds: [embed] });
     }
@@ -406,7 +406,7 @@ async function handleOde(interaction) {
         )
         .setFooter({ text: 'Borcu tamamen kapatırsan kredi puanın daha fazla yükselir.' });
     if (seasonGrant && seasonGrant.granted > 0) {
-        embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+        embed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
     }
     return interaction.reply({ embeds: [embed] });
 }

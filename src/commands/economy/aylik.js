@@ -29,7 +29,7 @@ module.exports = {
         }
 
         const newWallet = Number(userData.wallet) + reward;
-        const embed = createEmbed('reward', '🏆 Aylık Ödül Alındı', 'Aylık MetaCoin ödülün cüzdanına eklendi.')
+        const embed = createEmbed('reward', '🎁 Aylık Ödül Alındı', 'Aylık MetaCoin ödülün cüzdanına eklendi.')
             .addFields(
                 { name: 'Ödül', value: fmtMoney(reward), inline: true },
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true },
@@ -37,7 +37,7 @@ module.exports = {
             )
             .setFooter({ text: 'Aylık ödül büyük kazanç sağlar; cüzdanını ve bankanı dengeli kullan.' });
         if (seasonGrant && seasonGrant.granted > 0) {
-            embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            embed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }
         await interaction.reply({ embeds: [embed] });
     }

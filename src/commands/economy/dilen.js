@@ -43,7 +43,7 @@ module.exports = {
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
             );
         if (seasonGrant && seasonGrant.granted > 0) {
-            embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            embed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }
         await interaction.reply({ embeds: [embed] });
     }

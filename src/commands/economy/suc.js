@@ -39,7 +39,7 @@ module.exports = {
                     { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true }
                 );
             if (seasonGrant && seasonGrant.granted > 0) {
-                winEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+                winEmbed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
             return interaction.reply({ embeds: [winEmbed] });
         }
@@ -61,7 +61,7 @@ module.exports = {
             )
             .setFooter({ text: 'Sıradaki fırsatı takip etmek için /bekleme kullan.' });
         if (seasonGrant && seasonGrant.granted > 0) {
-            loseEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            loseEmbed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }
         return interaction.reply({ embeds: [loseEmbed] });
     }
