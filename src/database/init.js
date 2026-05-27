@@ -108,6 +108,49 @@ async function initDB() {
                 reward_amount BIGINT DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS economy_user_tasks (
+                id           SERIAL PRIMARY KEY,
+                user_id      VARCHAR(25) NOT NULL,
+                task_code    VARCHAR(80) NOT NULL,
+                period_type  VARCHAR(20) NOT NULL,
+                period_key   VARCHAR(30) NOT NULL,
+                progress     INTEGER DEFAULT 0,
+                target_count INTEGER NOT NULL,
+                completed_at TIMESTAMP,
+                claimed_at   TIMESTAMP,
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, task_code, period_key)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_user_tasks_user_period
+                ON economy_user_tasks(user_id, period_type, period_key);
+            CREATE INDEX IF NOT EXISTS idx_user_tasks_task_code
+                ON economy_user_tasks(task_code);
+            CREATE INDEX IF NOT EXISTS idx_user_tasks_claimed
+                ON economy_user_tasks(claimed_at);
+
+            CREATE TABLE IF NOT EXISTS economy_user_achievements (
+                id               SERIAL PRIMARY KEY,
+                user_id          VARCHAR(25) NOT NULL,
+                achievement_code VARCHAR(80) NOT NULL,
+                progress         INTEGER DEFAULT 0,
+                unlocked_at      TIMESTAMP,
+                claimed_at       TIMESTAMP,
+                created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, achievement_code)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_user_achievements_user
+                ON economy_user_achievements(user_id);
+            CREATE INDEX IF NOT EXISTS idx_user_achievements_code
+                ON economy_user_achievements(achievement_code);
+            CREATE INDEX IF NOT EXISTS idx_user_achievements_unlocked
+                ON economy_user_achievements(unlocked_at);
+            CREATE INDEX IF NOT EXISTS idx_user_achievements_claimed
+                ON economy_user_achievements(claimed_at);
         `);
         console.log('✅ Veritabanı tabloları hazır.');
     } finally {
