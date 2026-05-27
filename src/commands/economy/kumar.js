@@ -12,6 +12,7 @@ const {
     applyAmuletBonus
 } = require('../../services/gamblingService');
 const { grantCappedPoints } = require('../../services/seasonService');
+const { trigger } = require('../../services/progressionService');
 
 module.exports = {
     data: {
@@ -38,6 +39,12 @@ module.exports = {
             seasonGrant = await grantCappedPoints(interaction.user.id, 'gambling', 3, 20);
         } catch (err) {
             console.error('Sezon puanı eklenemedi (kumar):', err?.message);
+        }
+
+        try {
+            await trigger(interaction.user.id, 'gamble_played', 1, { source: 'kumar', bet: amount });
+        } catch (err) {
+            console.error('Görev ilerlemesi eklenemedi (kumar):', err?.message);
         }
 
         const win = Math.random() < finalChance;

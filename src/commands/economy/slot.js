@@ -7,6 +7,7 @@ const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { SLOT_MIN_BET, rollSlot } = require('../../services/gamblingService');
 const { grantCappedPoints } = require('../../services/seasonService');
+const { trigger } = require('../../services/progressionService');
 
 module.exports = {
     data: {
@@ -35,6 +36,12 @@ module.exports = {
             seasonGrant = await grantCappedPoints(interaction.user.id, 'gambling', 3, 20);
         } catch (err) {
             console.error('Sezon puanı eklenemedi (slot):', err?.message);
+        }
+
+        try {
+            await trigger(interaction.user.id, 'gamble_played', 1, { source: 'slot', bet: amount });
+        } catch (err) {
+            console.error('Görev ilerlemesi eklenemedi (slot):', err?.message);
         }
 
         if (amuletSaved) {

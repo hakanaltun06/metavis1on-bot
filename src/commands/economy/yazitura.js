@@ -7,6 +7,7 @@ const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { COINFLIP_MIN_BET, applyAmuletBonus } = require('../../services/gamblingService');
 const { grantCappedPoints } = require('../../services/seasonService');
+const { trigger } = require('../../services/progressionService');
 
 module.exports = {
     data: {
@@ -36,6 +37,12 @@ module.exports = {
             seasonGrant = await grantCappedPoints(interaction.user.id, 'gambling', 2, 20);
         } catch (err) {
             console.error('Sezon puanı eklenemedi (yazitura):', err?.message);
+        }
+
+        try {
+            await trigger(interaction.user.id, 'gamble_played', 1, { source: 'yazitura', bet: amount, choice });
+        } catch (err) {
+            console.error('Görev ilerlemesi eklenemedi (yazitura):', err?.message);
         }
 
         const choiceLabel = choice === 'yazi' ? 'Yazı' : 'Tura';
