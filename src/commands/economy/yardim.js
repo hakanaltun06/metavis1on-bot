@@ -10,7 +10,7 @@ module.exports = {
 
     async execute(interaction) {
         const embed = createEmbed('premium', '📖 MetaVis1on — Komut Rehberi',
-            '**İlk kez başlıyorsan:** `/gunluk` → `/calis` → `/bakiye` → `/yatir` → `/sezon`\n\nTüm komutlar aşağıda kategorilere göre listelenmiştir.')
+            '**İlk kez başlıyorsan:** `/gunluk` ile ödülünü al, `/calis` ile MetaCoin kazan, `/gorevler` ile hedeflerini takip et, `/basarimlar` ile kalıcı ilerlemeni gör.\n\nTüm komutlar aşağıda kategorilere göre listelenmiştir.')
             .addFields(
                 {
                     name: '💸 Para Yönetimi',
@@ -50,6 +50,11 @@ module.exports = {
                 {
                     name: '🏆 Sezon',
                     value: '`/sezon` — Sezon puanın, seviyeni ve sıralamana bak\n`/sezon-siralama` — Sezon liderlik tablosu\n`/sezon-oduller` — Sezon ödül kademeleri\n`/sezon-gecmis` — Geçmiş tamamlanmış sezonlar',
+                    inline: false
+                },
+                {
+                    name: '🎯 İlerleme',
+                    value: '`/gorevler` — Günlük ve haftalık görevlerini görüntüle, tamamlanan ödülleri al\n`/basarimlar` — Kalıcı başarımlarını, rozetlerini ve ödüllerini görüntüle',
                     inline: false
                 },
                 {

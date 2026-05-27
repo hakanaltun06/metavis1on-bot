@@ -9,6 +9,7 @@ const { calculateFillPct } = require('../../services/bankService');
 const { refreshUserLoans } = require('../../services/loanRefresh');
 const { isCrateItem, isRareItem, getRareItemByCode } = require('../../services/crateService');
 const { getCurrentSeason, getUserSeasonData, getUserSeasonRank } = require('../../services/seasonService');
+const { getDailyTasks, getWeeklyTasks, getUserAchievements } = require('../../services/progressionService');
 
 module.exports = {
     data: {
@@ -62,6 +63,37 @@ module.exports = {
                 };
             }
         } catch (_) {}
+
+        let progressField = null;
+        try {
+            const [dailyTasks, weeklyTasks, achievements] = await Promise.all([
+                getDailyTasks(target.id),
+                getWeeklyTasks(target.id),
+                getUserAchievements(target.id)
+            ]);
+            const dailyDone  = dailyTasks.filter(t => t.completed).length;
+            const weeklyDone = weeklyTasks.filter(t => t.completed).length;
+            const unlocked   = achievements.filter(a => a.unlocked);
+            const taskClaim  = [...dailyTasks, ...weeklyTasks].filter(t => t.completed && !t.claimed).length;
+            const achClaim   = achievements.filter(a => a.unlocked && !a.claimed).length;
+            const badgeIcons = unlocked.slice(0, 5).map(a => a.icon).join(' ');
+            const lines = [
+                `Günlük görevler: **${dailyDone}/${dailyTasks.length}** tamamlandı`,
+                `Haftalık görevler: **${weeklyDone}/${weeklyTasks.length}** tamamlandı`,
+                `Başarımlar: **${unlocked.length}/${achievements.length}** açıldı`,
+                badgeIcons ? `Rozetler: ${badgeIcons}` : 'Rozetler: Henüz yok.'
+            ];
+            if (taskClaim + achClaim > 0) {
+                const parts = [];
+                if (taskClaim > 0) parts.push(`${taskClaim} görev`);
+                if (achClaim  > 0) parts.push(`${achClaim} başarım`);
+                lines.push(`Hazır ödül: ${parts.join(' · ')} — /gorevler /basarimlar`);
+            }
+            progressField = { name: '🎯 İlerleme', value: lines.join('\n'), inline: false };
+        } catch (err) {
+            console.error('Profil ilerleme verisi alınamadı:', err?.message);
+        }
+
         const krediBlok = isSelf
             ? (loanSummary.activeCount > 0
                 ? `Puan: **${creditScore}**\nAktif: **${loanSummary.activeCount}** kredi\nAçık Borç: **${formatNumber(loanSummary.activeDebt)}** ${CURRENCY_NAME} ${CURRENCY}`
@@ -104,7 +136,8 @@ module.exports = {
             )
             .setFooter({ text: `Hesap açılışı: ${formatDate(userData.created_at)}` });
 
-        if (seasonField) embed.addFields(seasonField);
+        if (seasonField)   embed.addFields(seasonField);
+        if (progressField) embed.addFields(progressField);
 
         await interaction.reply({ embeds: [embed] });
     }
