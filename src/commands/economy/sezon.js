@@ -65,7 +65,7 @@ module.exports = {
                       value: 'Günlük ödül, çalışma, suç, kasa açma, satış, kredi ödeme ve bazı oyun komutları sezon puanı kazandırır.',
                       inline: false }
                 )
-                .setFooter({ text: 'Sezon puanı, aktif ekonomi komutlarını kullandıkça kazanılır.' });
+                .setFooter({ text: 'Sezon puanı aktif komutları kullandıkça kazanılır · /sezon-siralama · /sezon-oduller' });
 
             return interaction.reply({ embeds: [embed] });
 

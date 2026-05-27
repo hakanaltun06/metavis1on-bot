@@ -39,7 +39,7 @@ function buildAchievementText(achievements) {
         let status;
         if (a.claimed)       status = '✅ Ödül alındı';
         else if (a.unlocked) status = '🎁 Ödül hazır';
-        else                 status = 'Devam ediyor';
+        else                 status = '⏳ Devam ediyor';
 
         return (
             `${icon} **${a.title}**\n` +
@@ -102,10 +102,10 @@ module.exports = {
             const achievements = await getUserAchievements(userId);
 
             embeds.push(
-                createEmbed('info', '🏆 Başarımlar',
+                createEmbed('info', '🏅 Başarımlar',
                     'Ekonomi yolculuğunda kazandığın rozetleri buradan takip edebilirsin.\n\n' +
                     buildAchievementText(achievements))
-                    .setFooter({ text: 'Ödülleri toplamak için /basarimlar komutunu kullan, odulleri_al seçeneğini aç.' })
+                    .setFooter({ text: 'Ödülleri toplamak için /basarimlar odulleri_al seçeneğini aç · Günlük hedeflerin için /gorevler' })
             );
 
             return interaction.reply({ embeds });

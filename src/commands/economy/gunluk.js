@@ -46,8 +46,8 @@ module.exports = {
         const newWallet = Number(userData.wallet) + totalReward;
         const streakReset = diffDays > 1 && userData.daily_streak > 0;
         const footerText = streakReset
-            ? 'Bir günden fazla beklediğin için serin sıfırlandı.'
-            : 'Serini korudukça günlük kazancın güçlenir.';
+            ? 'Bir günden fazla beklediğin için serin sıfırlandı · Görevlerini takip etmek için /gorevler'
+            : 'Serini korudukça günlük kazancın güçlenir · Günlük hedeflerini görmek için /gorevler';
 
         const fields = [
             { name: 'Günlük Ödül', value: fmtMoney(REWARDS.DAILY_BASE), inline: true },
@@ -61,7 +61,7 @@ module.exports = {
             { name: 'Sonraki Günlük', value: '24 saat sonra', inline: true }
         );
         if (seasonGrant && seasonGrant.granted > 0) {
-            fields.push({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            fields.push({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }
 
         const embed = createEmbed('reward', '🎁 Günlük Ödül Alındı', 'Günlük MetaCoin ödülün cüzdanına eklendi.')

@@ -92,9 +92,9 @@ module.exports = {
                 { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: true },
                 { name: 'Toplam Mesai', value: `**${newWorkCount}** kez`, inline: true }
             )
-            .setFooter({ text: 'Daha hızlı çalışmak için /kullan ile Odak Kahvesi veya Enerji İçeceği kullanabilirsin.' });
+            .setFooter({ text: 'Beklemeyi hızlandırmak için /kullan · Görev ilerlemeni görmek için /gorevler' });
         if (seasonGrant && seasonGrant.granted > 0) {
-            embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            embed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }
         await interaction.reply({ embeds: [embed] });
     }

@@ -73,7 +73,7 @@ module.exports = {
             }, 0);
 
             embed.addFields(
-                { name: '🏆 Koleksiyon', value: lines, inline: false },
+                { name: '💎 Koleksiyon', value: lines, inline: false },
                 { name: 'Koleksiyon Özeti', value: `Toplam Değer: ${formatFull(colValue)} ${CURRENCY_NAME} ${CURRENCY}\nToplam Adet: **${colTotal}**`, inline: false }
             );
         }

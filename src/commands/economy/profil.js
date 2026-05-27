@@ -57,7 +57,7 @@ module.exports = {
                 const sLevel    = sUser ? Number(sUser.season_level)   : 1;
                 const sRankText = sRank != null ? `#${sRank}` : 'Henüz yok';
                 seasonField = {
-                    name: '🏆 Sezon',
+                    name: '⭐ Sezon',
                     value: `Puan: **${formatNumber(sPoints)}**\nSeviye: **${sLevel}**\nSıra: **${sRankText}**`,
                     inline: true
                 };
@@ -134,7 +134,7 @@ module.exports = {
                 { name: '📈 Para Akışı', value: `Kazanılan: **${formatNumber(userData.total_earned)}** ${CURRENCY_NAME} ${CURRENCY}\nKaybedilen: **${formatNumber(userData.total_lost)}** ${CURRENCY_NAME} ${CURRENCY}`, inline: true },
                 { name: '🥷 Suç ve Kumar', value: `Soygun: **${userData.rob_success} başarı / ${userData.rob_fail} başarısız**\nKumar: **${userData.gamble_count} el**`, inline: true }
             )
-            .setFooter({ text: `Hesap açılışı: ${formatDate(userData.created_at)}` });
+            .setFooter({ text: `Hesap açılışı: ${formatDate(userData.created_at)} · Sezon bilgin için /sezon · Görevlerin için /gorevler` });
 
         if (seasonField)   embed.addFields(seasonField);
         if (progressField) embed.addFields(progressField);

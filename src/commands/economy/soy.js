@@ -84,7 +84,7 @@ module.exports = {
             if (result.kind === 'shielded') {
                 const shieldEmbed = createEmbed('info', '🛡️ Engellendi', `${target.username} kişisinde **Soygun Kalkanı** vardı. Kalkan kırıldı ama hedef güvende.`);
                 if (seasonGrant && seasonGrant.granted > 0) {
-                    shieldEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+                    shieldEmbed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
                 }
                 return interaction.reply({ embeds: [shieldEmbed] });
             }
@@ -97,7 +97,7 @@ module.exports = {
                     )
                     .setFooter({ text: 'Riskli işlemlerden sonra durumunu /bakiye ile kontrol edebilirsin.' });
                 if (seasonGrant && seasonGrant.granted > 0) {
-                    successEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+                    successEmbed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
                 }
                 return interaction.reply({ embeds: [successEmbed] });
             }
@@ -108,7 +108,7 @@ module.exports = {
                 )
                 .setFooter({ text: 'Bekleme süreni görmek için /bekleme kullan.' });
             if (seasonGrant && seasonGrant.granted > 0) {
-                caughtEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+                caughtEmbed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
             return interaction.reply({ embeds: [caughtEmbed] });
         } catch (err) {

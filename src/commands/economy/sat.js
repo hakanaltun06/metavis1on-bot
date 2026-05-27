@@ -163,7 +163,7 @@ module.exports = {
                 )
                 .setFooter({ text: 'Kalan eşyalarını /envanter ile görebilirsin.' });
             if (seasonGrant && seasonGrant.granted > 0) {
-                embed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+                embed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
             return interaction.reply({ embeds: [embed] });
 

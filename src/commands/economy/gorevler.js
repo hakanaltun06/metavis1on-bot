@@ -61,7 +61,7 @@ function buildTaskText(tasks) {
         let status;
         if (task.claimed)    status = '✅ Ödül alındı';
         else if (task.completed) status = '🎁 Ödül hazır';
-        else                 status = 'Devam ediyor';
+        else                 status = '⏳ Devam ediyor';
 
         return (
             `${icon} **${task.title}**\n` +
@@ -140,7 +140,7 @@ module.exports = {
             embeds.push(
                 createEmbed('info', '📅 Haftalık Görevler',
                     buildTaskText(weeklyTasks))
-                    .setFooter({ text: 'Ödülleri toplamak için /gorevler komutunu kullan, odulleri_al seçeneğini aç.' })
+                    .setFooter({ text: 'Ödülleri toplamak için /gorevler odulleri_al seçeneğini aç · Kalıcı rozetlerin için /basarimlar' })
             );
 
             return interaction.reply({ embeds });

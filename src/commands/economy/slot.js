@@ -54,7 +54,7 @@ module.exports = {
                 )
                 .setFooter({ text: 'Şans Tılsımı aktif — Kayıp önlendi, bahisin iade edildi.' });
             if (seasonGrant && seasonGrant.granted > 0) {
-                savedEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+                savedEmbed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
             return interaction.reply({ embeds: [savedEmbed] });
         }
@@ -73,7 +73,7 @@ module.exports = {
                 )
                 .setFooter({ text: hasAmulet > 0 ? '🍀 Şans Tılsımı aktif.' : 'Bakiyeni kontrol etmek için /bakiye kullan.' });
             if (seasonGrant && seasonGrant.granted > 0) {
-                winEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+                winEmbed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
             return interaction.reply({ embeds: [winEmbed] });
         }
@@ -89,7 +89,7 @@ module.exports = {
             )
             .setFooter({ text: hasAmulet > 0 ? '🍀 Şans Tılsımı aktifti ama bu tur yetmedi.' : 'Bakiyeni kontrol etmek için /bakiye kullan.' });
         if (seasonGrant && seasonGrant.granted > 0) {
-            loseEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            loseEmbed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }
         return interaction.reply({ embeds: [loseEmbed] });
     }

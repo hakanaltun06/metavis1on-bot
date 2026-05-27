@@ -64,7 +64,7 @@ module.exports = {
                 winEmbed.addFields({ name: '🍀 Şans Tılsımı', value: 'Aktif — kazanma şansın biraz arttı.', inline: true });
             }
             if (seasonGrant && seasonGrant.granted > 0) {
-                winEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+                winEmbed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
             }
             return interaction.reply({ embeds: [winEmbed] });
         }
@@ -82,7 +82,7 @@ module.exports = {
             loseEmbed.addFields({ name: '🍀 Şans Tılsımı', value: 'Aktif — ama bu tur şans dönemedi.', inline: true });
         }
         if (seasonGrant && seasonGrant.granted > 0) {
-            loseEmbed.addFields({ name: '🏆 Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
+            loseEmbed.addFields({ name: '⭐ Sezon Puanı', value: `+${seasonGrant.granted} puan`, inline: true });
         }
         return interaction.reply({ embeds: [loseEmbed] });
     }
