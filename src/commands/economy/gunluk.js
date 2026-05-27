@@ -7,6 +7,7 @@ const { fmtMoney } = require('../../utils/format');
 const { COOLDOWNS } = require('../../utils/constants');
 const { computeDailyReward, REWARDS } = require('../../services/rewardsService');
 const { grantSeasonPoints } = require('../../services/seasonService');
+const { trigger } = require('../../services/progressionService');
 
 module.exports = {
     data: { name: 'gunluk', description: 'Günlük ödülünü alırsın ve serini korursun.' },
@@ -34,6 +35,12 @@ module.exports = {
             seasonGrant = await grantSeasonPoints(interaction.user.id, 12);
         } catch (err) {
             console.error('Sezon puanı eklenemedi (gunluk):', err?.message);
+        }
+
+        try {
+            await trigger(interaction.user.id, 'daily_claimed', 1, { source: 'gunluk' });
+        } catch (err) {
+            console.error('Görev ilerlemesi eklenemedi (gunluk):', err?.message);
         }
 
         const newWallet = Number(userData.wallet) + totalReward;

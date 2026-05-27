@@ -5,6 +5,7 @@ const { moveWalletToBank } = require('../../database/money');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
 const { BANK_LEVELS } = require('../../utils/constants');
+const { trigger } = require('../../services/progressionService');
 
 module.exports = {
     data: {
@@ -44,6 +45,12 @@ module.exports = {
             if (result.kind === 'no_wallet') return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında bu kadar para yok.')], flags: MessageFlags.Ephemeral });
             if (result.kind === 'full') return interaction.reply({ embeds: [createEmbed('warn', '🏦 Banka Dolu', 'Bankanda yer kalmamış. Kapasiteni artırman gerekiyor. `/banka-yukselt` ile seviyeni yükseltebilirsin.')], flags: MessageFlags.Ephemeral });
             if (result.kind === 'over') return interaction.reply({ embeds: [createEmbed('warn', '🏦 Yer Yetersiz', `Bankanda sadece ${fmtMoney(result.room)} kadar yer var. Daha fazlasını yatırabilmek için kapasiteni artır.`)], flags: MessageFlags.Ephemeral });
+
+            try {
+                await trigger(interaction.user.id, 'bank_deposit', 1, { source: 'yatir', amount: result.amount });
+            } catch (err) {
+                console.error('Görev ilerlemesi eklenemedi (yatir):', err?.message);
+            }
 
             const embed = createEmbed('bank', '🏦 Bankaya Yatırıldı', 'MetaCoin bankana aktarıldı.')
                 .addFields(

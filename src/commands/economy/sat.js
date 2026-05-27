@@ -15,6 +15,7 @@ const {
 } = require('../../services/crateService');
 const { findItemById } = require('../../services/shopService');
 const { grantCappedPoints } = require('../../services/seasonService');
+const { trigger } = require('../../services/progressionService');
 
 function getSellSeasonPoints(rarity) {
     const key = String(rarity || '').toLowerCase();
@@ -141,6 +142,12 @@ module.exports = {
                 seasonGrant = await grantCappedPoints(interaction.user.id, 'sell', getSellSeasonPoints(rareItem.rarity) * qty, 100);
             } catch (err) {
                 console.error('Sezon puanı eklenemedi (sat):', err?.message);
+            }
+
+            try {
+                await trigger(interaction.user.id, 'item_sold', qty, { source: 'sat', itemCode, quantity: qty });
+            } catch (err) {
+                console.error('Görev ilerlemesi eklenemedi (sat):', err?.message);
             }
 
             const emoji = getRarityEmoji(rareItem.rarity);

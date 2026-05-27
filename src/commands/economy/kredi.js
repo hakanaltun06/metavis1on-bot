@@ -32,6 +32,7 @@ const {
 } = require('../../services/loanService');
 const { refreshUserLoans } = require('../../services/loanRefresh');
 const { grantCappedPoints } = require('../../services/seasonService');
+const { trigger } = require('../../services/progressionService');
 
 // ================== [ KOMUT TANIMI ] ==================
 module.exports = {
@@ -369,6 +370,12 @@ async function handleOde(interaction) {
         seasonGrant = await grantCappedPoints(interaction.user.id, 'loan', loanSeasonPoints, 45);
     } catch (err) {
         console.error('Sezon puanı eklenemedi (kredi-ode):', err?.message);
+    }
+
+    try {
+        await trigger(interaction.user.id, 'loan_paid', 1, { source: 'kredi', subcommand: 'ode', amount: outcome.paid });
+    } catch (err) {
+        console.error('Görev ilerlemesi eklenemedi (kredi-ode):', err?.message);
     }
 
     if (outcome.closed) {

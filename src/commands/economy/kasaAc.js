@@ -14,6 +14,7 @@ const {
     getRarityEmoji
 } = require('../../services/crateService');
 const { grantCappedPoints } = require('../../services/seasonService');
+const { trigger } = require('../../services/progressionService');
 
 const CRATE_SEASON_POINTS = {
     basit_kasa:    5,
@@ -161,6 +162,12 @@ module.exports = {
                 } catch (err) {
                     console.error('Sezon puanı eklenemedi (kasa-ac):', err?.message);
                 }
+            }
+
+            try {
+                await trigger(interaction.user.id, 'crate_opened', qty, { source: 'kasa-ac', crateCode });
+            } catch (err) {
+                console.error('Görev ilerlemesi eklenemedi (kasa-ac):', err?.message);
             }
 
             const rewardLines = result.rewards.map((r, i) => {

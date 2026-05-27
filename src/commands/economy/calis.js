@@ -8,6 +8,7 @@ const { getMins } = require('../../utils/time');
 const { COOLDOWNS } = require('../../utils/constants');
 const { rollWorkReward } = require('../../services/rewardsService');
 const { grantSeasonPoints } = require('../../services/seasonService');
+const { trigger } = require('../../services/progressionService');
 
 const WORK_JOBS = [
     // Ofis / veri
@@ -76,6 +77,12 @@ module.exports = {
             seasonGrant = await grantSeasonPoints(interaction.user.id, 8);
         } catch (err) {
             console.error('Sezon puanı eklenemedi (calis):', err?.message);
+        }
+
+        try {
+            await trigger(interaction.user.id, 'work_completed', 1, { source: 'calis' });
+        } catch (err) {
+            console.error('Görev ilerlemesi eklenemedi (calis):', err?.message);
         }
 
         const embed = createEmbed('reward', '💼 Mesai Tamamlandı')

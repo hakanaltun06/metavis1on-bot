@@ -12,6 +12,7 @@ const {
     getDynamicPrice
 } = require('../../services/economyService');
 const { getCrateByCode, getCrateTypes, calculateCrateDynamicPrice } = require('../../services/crateService');
+const { trigger } = require('../../services/progressionService');
 
 module.exports = {
     data: {
@@ -92,6 +93,12 @@ module.exports = {
 
             if (result.kind === 'no_money') {
                 return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', `Bu alışveriş için cüzdanında ${fmtMoney(result.cost)} olmalı.`)], flags: MessageFlags.Ephemeral });
+            }
+
+            try {
+                await trigger(interaction.user.id, 'item_bought', qty, { source: 'satinal', itemCode: itemId, quantity: qty });
+            } catch (err) {
+                console.error('Görev ilerlemesi eklenemedi (satinal):', err?.message);
             }
 
             const footerText = crate
