@@ -1,3 +1,4 @@
+const { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { createEmbed } = require('../../utils/embeds');
 const { formatFull } = require('../../utils/format');
 const { CURRENCY, CURRENCY_NAME, SHOP_ITEMS } = require('../../utils/constants');
@@ -9,6 +10,7 @@ const {
     getDynamicPrice
 } = require('../../services/economyService');
 const { getCrateTypes, calculateCrateDynamicPrice } = require('../../services/crateService');
+const { disableAllComponents } = require('../../utils/componentUtils');
 
 // Vitrin için kısa ve vurucu açıklamalar
 const ITEM_SHORT_DESCS = {
@@ -67,53 +69,133 @@ function buildSection(blocks) {
     return blocks.join('\n\n');
 }
 
+// Sekme butonları — aktif sekme mavi+devre dışı, diğerleri gri
+function buildButtons(active, interactionId) {
+    const tabs = [
+        { id: 'items',  label: '⚡ Eşyalar' },
+        { id: 'crates', label: '📦 Kasalar'  },
+        { id: 'info',   label: 'ℹ️ Piyasa'  },
+    ];
+    const buttons = tabs.map(tab =>
+        new ButtonBuilder()
+            .setCustomId(`market:${tab.id}:${interactionId}`)
+            .setLabel(tab.label)
+            .setStyle(tab.id === active ? ButtonStyle.Primary : ButtonStyle.Secondary)
+            .setDisabled(tab.id === active)
+    );
+    return new ActionRowBuilder().addComponents(buttons);
+}
+
+function buildItemsEmbed(index, mood) {
+    const consumables = SHOP_ITEMS.filter(i => i.type === 'consumable');
+    const passives    = SHOP_ITEMS.filter(i => i.type === 'passive');
+    const flex        = SHOP_ITEMS.filter(i => i.type === 'flex');
+    const embed = createEmbed('market', '🛒 metavis1on Market · Eşyalar', `**Piyasa Durumu:** ${mood}`);
+    embed.addFields(
+        { name: '⚡ Kullanılabilir',   value: buildSection(consumables.map(i => buildItemBlock(i, index))), inline: false },
+        { name: '🛡️ Pasif Avantajlar', value: buildSection(passives.map(i => buildItemBlock(i, index))),    inline: false },
+        { name: '💎 Prestij ve Özel',  value: buildSection(flex.map(i => buildItemBlock(i, index))),        inline: false }
+    );
+    embed.setFooter({ text: 'Satın almak için /satinal · Kasaları görmek için 📦 Kasalar butonuna bas' });
+    return embed;
+}
+
+function buildCratesEmbed(index, mood) {
+    const allCrates     = getCrateTypes();
+    const starterCrates = allCrates.slice(0, 4); // basit, nadir, nexus, epik
+    const premiumCrates = allCrates.slice(4);    // neon, efsanevi, prestij
+    const embed = createEmbed('crate', '📦 metavis1on Market · Kasalar',
+        `**Piyasa Durumu:** ${mood} · Fiyatlar ekonomiye göre değişir.`
+    );
+    embed.addFields(
+        { name: '📦 Başlangıç & Orta Seviye', value: buildSection(starterCrates.map(c => buildCrateBlock(c, index))), inline: false },
+        { name: '👑 Premium Kasalar',          value: buildSection(premiumCrates.map(c => buildCrateBlock(c, index))), inline: false }
+    );
+    embed.setFooter({ text: 'Kasa almak için /satinal · Kasa açmak için /kasa-ac · Eşyalar için ⚡ Eşyalar butonuna bas' });
+    return embed;
+}
+
+function buildInfoEmbed(mood, trend) {
+    const embed = createEmbed('info', 'ℹ️ metavis1on Market · Piyasa Bilgisi',
+        `**Piyasa Durumu:** ${mood}\n${trend}`
+    );
+    embed.addFields(
+        { name: '📈 Fiyatlar Nasıl Değişir?', value: 'Fiyatlar, sunucudaki toplam para miktarına göre otomatik olarak ayarlanır. Para fazlalaşınca fiyatlar yükselir, azalınca düşer.', inline: false },
+        { name: '🛒 Nasıl Satın Alırım?',     value: '`/satinal` komutunu kullan. Eşya veya kasa seçip kaç adet istediğini belirt, MetaCoin cüzdanından düşülür.', inline: false },
+        { name: '📦 Kasaları Nasıl Açarım?',  value: '`/kasa-ac` komutunu kullan. Her kasada MetaCoin veya koleksiyon eşyası kazanma şansın var.', inline: false },
+        { name: '🎒 Eşyalarım Nerede?',       value: '`/envanter` ile sahip olduklarını gör. Kullanılabilir eşyalar için `/kullan` komutunu dene.', inline: false }
+    );
+    embed.setFooter({ text: '/satinal · /envanter · /kullan · /kasa-ac' });
+    return embed;
+}
+
+const COLLECTOR_TIMEOUT = 5 * 60 * 1000;
+
 module.exports = {
     data: { name: 'market', description: 'Market eşyalarını ve güncel fiyatları gösterir.' },
     async execute(interaction) {
-        const supply = await getMoneySupply();
-        const index  = calculateInflationIndex(supply.total);
-        const mood   = getEconomyMood(index);
-        const trend  = getPriceTrend(index);
+        try {
+            const supply = await getMoneySupply();
+            const index  = calculateInflationIndex(supply.total);
+            const mood   = getEconomyMood(index);
+            const trend  = getPriceTrend(index);
 
-        // ── Embed 1: Ana Rehber ──────────────────────────────────────────────
-        const mainEmbed = createEmbed(
-            'market',
-            '🛒 metavis1on Market',
-            `MetaCoin ile eşya, avantaj ve kasa satın alabileceğin ekonomi vitrini.\n\n**Piyasa Durumu:** ${mood}\n${trend}`
-        );
-        mainEmbed.addFields(
-            { name: '⚡ Kullanılabilir Eşyalar', value: '/kullan ile aktif edilir. Bekleme sürelerini sıfırlar veya anlık avantaj sağlar.', inline: false },
-            { name: '🛡️ Pasif Avantajlar',       value: 'Envanterde durdukça otomatik etki sağlar. Aktif kullanım gerekmez.',              inline: false },
-            { name: '💎 Prestij ve Özel',         value: 'Profil ve koleksiyon değeri taşır. Biriktirilir veya sergilenir.',                inline: false },
-            { name: '📦 Kasalar',                 value: 'Koleksiyon eşyası ve MetaCoin kazanmak için açılır. /kasa-ac ile aç.',            inline: false }
-        );
-        mainEmbed.setFooter({ text: '/satinal · /kullan · /kasa-ac · /envanter · Fiyatlar ekonomiye göre değişir.' });
+            let currentRow = buildButtons('items', interaction.id);
 
-        // ── Embed 2: Market Eşyaları ─────────────────────────────────────────
-        const consumables = SHOP_ITEMS.filter(i => i.type === 'consumable');
-        const passives    = SHOP_ITEMS.filter(i => i.type === 'passive');
-        const flex        = SHOP_ITEMS.filter(i => i.type === 'flex');
+            const message = await interaction.reply({
+                embeds: [buildItemsEmbed(index, mood)],
+                components: [currentRow],
+                fetchReply: true
+            });
 
-        const itemEmbed = createEmbed('market', '⚡ Market Eşyaları', '');
-        itemEmbed.addFields(
-            { name: '⚡ Kullanılabilir',   value: buildSection(consumables.map(i => buildItemBlock(i, index))), inline: false },
-            { name: '🛡️ Pasif Avantajlar', value: buildSection(passives.map(i => buildItemBlock(i, index))),    inline: false },
-            { name: '💎 Prestij ve Özel',  value: buildSection(flex.map(i => buildItemBlock(i, index))),        inline: false }
-        );
-        itemEmbed.setFooter({ text: 'Satın almak için /satinal · Kullanmak için /kullan' });
+            const collector = message.createMessageComponentCollector({
+                time: COLLECTOR_TIMEOUT,
+                filter: i => i.customId.startsWith('market:') && i.customId.endsWith(`:${interaction.id}`)
+            });
 
-        // ── Embed 3: Kasa Vitrini ────────────────────────────────────────────
-        const allCrates     = getCrateTypes();
-        const starterCrates = allCrates.slice(0, 4); // basit, nadir, nexus, epik
-        const premiumCrates = allCrates.slice(4);    // neon, efsanevi, prestij
+            collector.on('collect', async (btn) => {
+                if (btn.user.id !== interaction.user.id) {
+                    return btn.reply({
+                        content: 'Bu market menüsü sana ait değil. Kendi marketini görmek için `/market` kullan.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
 
-        const crateEmbed = createEmbed('crate', '📦 Kasa Vitrini', 'Koleksiyon eşyası veya MetaCoin içerebilir. Fiyatlar piyasaya göre değişir.');
-        crateEmbed.addFields(
-            { name: '📦 Başlangıç & Orta Seviye', value: buildSection(starterCrates.map(c => buildCrateBlock(c, index))),  inline: false },
-            { name: '👑 Premium Kasalar',          value: buildSection(premiumCrates.map(c => buildCrateBlock(c, index))), inline: false }
-        );
-        crateEmbed.setFooter({ text: 'Satın almak için /satinal · Kasa açmak için /kasa-ac' });
+                const tab = btn.customId.split(':')[1];
 
-        await interaction.reply({ embeds: [mainEmbed, itemEmbed, crateEmbed] });
+                let embed;
+                if (tab === 'items')       embed = buildItemsEmbed(index, mood);
+                else if (tab === 'crates') embed = buildCratesEmbed(index, mood);
+                else                       embed = buildInfoEmbed(mood, trend);
+
+                currentRow = buildButtons(tab, interaction.id);
+                try {
+                    await btn.update({ embeds: [embed], components: [currentRow] });
+                } catch {
+                    // Mesaj silindi veya etkileşim süresi doldu — sessizce geç
+                }
+            });
+
+            collector.on('end', async () => {
+                try {
+                    await message.edit({ components: disableAllComponents([currentRow]) });
+                } catch {
+                    // Mesaj artık mevcut değil — sessizce geç
+                }
+            });
+
+        } catch (err) {
+            console.error('Market komutu hatası:', err?.message);
+            const errorEmbed = createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Market şu an yüklenemiyor. Biraz sonra tekrar dene.');
+            try {
+                if (interaction.replied || interaction.deferred) {
+                    await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+                } else {
+                    await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+                }
+            } catch {
+                // ignore
+            }
+        }
     }
 };
