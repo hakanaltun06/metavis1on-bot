@@ -47,7 +47,8 @@ const adminModules = [
     require('./admin/paraEkle'),
     require('./admin/paraSil'),
     require('./admin/ekonomiSifirla'),
-    require('./admin/sezonYonet')
+    require('./admin/sezonYonet'),
+    require('./admin/admin')
 ];
 
 const allModules = [...economyModules, ...adminModules];
