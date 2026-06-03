@@ -46,7 +46,8 @@ const COOLDOWNS = {
     BEG: 300000,          // 5 dakika
     DAILY: 86400000,      // 24 saat
     WEEKLY: 604800000,    // 7 gün
-    MONTHLY: 2592000000   // 30 gün
+    MONTHLY: 2592000000,  // 30 gün
+    GAMBLE_SPAM: 10000    // 10 saniye — kumar spam koruması (bellek içi)
 };
 
 // Enflasyon / piyasa ayarları

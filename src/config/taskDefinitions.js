@@ -64,6 +64,24 @@ const DAILY_TASK_DEFINITIONS = [
         eventType: 'gamble_played',
         targetCount: 1,
         reward: { type: 'coin', amount: 400 }
+    },
+    {
+        code: 'daily_crime',
+        type: 'daily',
+        title: 'Suç İşi',
+        description: 'Gün içinde 1 kez suç işle.',
+        eventType: 'crime_committed',
+        targetCount: 1,
+        reward: { type: 'coin', amount: 600 }
+    },
+    {
+        code: 'daily_rob',
+        type: 'daily',
+        title: 'Başarılı Soygun',
+        description: 'Gün içinde 1 başarılı soygun yap.',
+        eventType: 'rob_success',
+        targetCount: 1,
+        reward: { type: 'coin', amount: 800 }
     }
 ];
 
@@ -130,6 +148,24 @@ const WEEKLY_TASK_DEFINITIONS = [
         eventType: 'bank_deposit',
         targetCount: 1,
         reward: { type: 'coin', amount: 7000 }
+    },
+    {
+        code: 'weekly_crime',
+        type: 'weekly',
+        title: 'Haftalık Suç',
+        description: '5 kez suç işle.',
+        eventType: 'crime_committed',
+        targetCount: 5,
+        reward: { type: 'coin', amount: 4000 }
+    },
+    {
+        code: 'weekly_rob',
+        type: 'weekly',
+        title: 'Soyguncu Haftası',
+        description: '3 başarılı soygun yap.',
+        eventType: 'rob_success',
+        targetCount: 3,
+        reward: { type: 'coin', amount: 5000 }
     }
 ];
 

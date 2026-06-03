@@ -8,6 +8,7 @@ const { getMins } = require('../../utils/time');
 const { COOLDOWNS } = require('../../utils/constants');
 const { rollCrime } = require('../../services/riskService');
 const { grantSeasonPoints } = require('../../services/seasonService');
+const { trigger } = require('../../services/progressionService');
 
 module.exports = {
     data: { name: 'suc', description: 'Yasadışı işlere bulaşırsın. Kazanç büyük, risk yüksek.' },
@@ -23,6 +24,13 @@ module.exports = {
         await pool.query('UPDATE economy_users SET last_crime = CURRENT_TIMESTAMP WHERE user_id = $1', [interaction.user.id]);
 
         const outcome = rollCrime();
+
+        try {
+            await trigger(interaction.user.id, 'crime_committed', 1);
+        } catch (err) {
+            console.error('Görev ilerlemesi eklenemedi (suc):', err?.message);
+        }
+
         if (outcome.win) {
             const newWallet = Number(userData.wallet) + outcome.reward;
             await addMoney(interaction.user.id, outcome.reward, 'wallet');

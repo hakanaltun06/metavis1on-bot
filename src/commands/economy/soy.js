@@ -13,6 +13,7 @@ const {
     computeRobPenalty
 } = require('../../services/riskService');
 const { grantCappedPoints } = require('../../services/seasonService');
+const { trigger } = require('../../services/progressionService');
 
 const ROB_SEASON_POINTS = { success: 18, caught: 6, shielded: 8 };
 
@@ -89,6 +90,11 @@ module.exports = {
                 return interaction.reply({ embeds: [shieldEmbed] });
             }
             if (result.kind === 'success') {
+                try {
+                    await trigger(interaction.user.id, 'rob_success', 1);
+                } catch (err) {
+                    console.error('Görev ilerlemesi eklenemedi (soy-rob):', err?.message);
+                }
                 const successEmbed = createEmbed('success', '🥷 Soygun Başarılı', `${target.username} uyurken cüzdanına girdin.`)
                     .addFields(
                         { name: 'Hedef', value: target.username, inline: true },
