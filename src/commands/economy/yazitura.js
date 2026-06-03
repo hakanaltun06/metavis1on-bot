@@ -9,6 +9,7 @@ const { COINFLIP_MIN_BET, applyAmuletBonus } = require('../../services/gamblingS
 const { grantCappedPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
 const { getRuntimeCooldown, setRuntimeCooldown, getGambleCooldownMs } = require('../../services/runtimeCooldownService');
+const { getNumberSetting, getBooleanSetting } = require('../../services/settingsService');
 
 module.exports = {
     data: {
@@ -19,11 +20,30 @@ module.exports = {
         ]
     },
     async execute(interaction) {
+        const [gamblingEnabled, minBet, maxBet, multiplier, gambleCooldownMs] = await Promise.all([
+            getBooleanSetting('system.gambling_enabled', true),
+            getNumberSetting('coinflip.min_bet', COINFLIP_MIN_BET),
+            getNumberSetting('coinflip.max_bet', 1000000),
+            getNumberSetting('coinflip.multiplier', 2.0),
+            getGambleCooldownMs(),
+        ]);
+
+        if (!gamblingEnabled) {
+            return interaction.reply({
+                embeds: [createEmbed('warn', '🎲 Kumar Kapalı', 'Risk oyunları kısa süreliğine kapalı. Biraz sonra tekrar deneyebilirsin.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
         const choice = interaction.options.getString('secim');
         const amount = interaction.options.getInteger('miktar');
-        if (amount < COINFLIP_MIN_BET) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${fmtMoney(COINFLIP_MIN_BET)}.`)], flags: MessageFlags.Ephemeral });
+        if (amount < minBet) {
+            return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${fmtMoney(minBet)}.`)], flags: MessageFlags.Ephemeral });
+        }
+        if (maxBet > 0 && amount > maxBet) {
+            return interaction.reply({ embeds: [createEmbed('warn', '❌ Yüksek Bahis', `En yüksek bahis ${fmtMoney(maxBet)}.`)], flags: MessageFlags.Ephemeral });
+        }
 
-        const gambleCooldownMs = await getGambleCooldownMs();
         const leftMs = getRuntimeCooldown('yazitura', interaction.user.id);
         if (leftMs > 0) {
             const leftSec = Math.ceil(leftMs / 1000);
@@ -58,13 +78,15 @@ module.exports = {
         const resultLabel = result === 'yazi' ? 'Yazı' : 'Tura';
 
         if (win) {
-            const newWallet = Number(userData.wallet) + amount;
-            await addMoney(interaction.user.id, amount, 'wallet');
+            // multiplier = 2 → profit = amount; multiplier = 1.5 → profit = 0.5*amount
+            const profit = Math.floor(amount * (multiplier - 1));
+            const newWallet = Number(userData.wallet) + profit;
+            await addMoney(interaction.user.id, profit, 'wallet');
             const winEmbed = createEmbed('success', '🪙 Tahminin Tuttu', `Para **${resultLabel}** geldi.`)
                 .addFields(
                     { name: 'Seçimin', value: choiceLabel, inline: true },
                     { name: 'Sonuç', value: `${resultLabel} ✅`, inline: true },
-                    { name: 'Kazanç', value: fmtMoney(amount), inline: true },
+                    { name: 'Kazanç', value: fmtMoney(profit), inline: true },
                     { name: 'Yeni Cüzdan', value: fmtMoney(newWallet), inline: false }
                 )
                 .setFooter({ text: 'Bakiyeni kontrol etmek için /bakiye kullan.' });

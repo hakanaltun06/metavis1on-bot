@@ -33,6 +33,9 @@ const {
     MAX_USER_COOLDOWN_MS,
 } = require('../../services/adminControlService');
 const { getLoanRiskText } = require('../../services/loanService');
+const {
+    getNumberSetting, getBooleanSetting, listSettings, setSetting, resetSetting
+} = require('../../services/settingsService');
 
 // ==================[ YARDIMCI ]==================
 
@@ -49,6 +52,53 @@ const KOMUT_CHOICES = [
     { name: 'Yazı-Tura', value: 'yazitura' },
     { name: 'Slot',     value: 'slot'     },
 ];
+
+const KUMAR_AYAR_CHOICES = [
+    { name: 'Kumar Min Bahis',        value: 'gamble_min_bet'       },
+    { name: 'Kumar Max Bahis',        value: 'gamble_max_bet'       },
+    { name: 'Kumar Kazanma %',        value: 'gamble_win_chance'    },
+    { name: 'Kumar Kazanc Carpani',   value: 'gamble_multiplier'    },
+    { name: 'Yazi-Tura Min Bahis',    value: 'coinflip_min_bet'     },
+    { name: 'Yazi-Tura Max Bahis',    value: 'coinflip_max_bet'     },
+    { name: 'Yazi-Tura Carpani',      value: 'coinflip_multiplier'  },
+    { name: 'Slot Min Bahis',         value: 'slot_min_bet'         },
+    { name: 'Slot Max Bahis',         value: 'slot_max_bet'         },
+    { name: 'Slot Jackpot Carpani',   value: 'slot_jackpot'         },
+];
+
+// ayar choice → { settingKey, isPercentage, defaultValue, displayName }
+const KUMAR_AYAR_MAP = {
+    gamble_min_bet:      { key: 'gamble.min_bet',          isPercentage: false, defaultValue: 50,      displayName: 'Kumar Min Bahis'      },
+    gamble_max_bet:      { key: 'gamble.max_bet',          isPercentage: false, defaultValue: 1000000, displayName: 'Kumar Max Bahis'      },
+    gamble_win_chance:   { key: 'gamble.win_chance',       isPercentage: true,  defaultValue: 0.45,    displayName: 'Kumar Kazanma Oranı'  },
+    gamble_multiplier:   { key: 'gamble.win_multiplier',   isPercentage: false, defaultValue: 2.0,     displayName: 'Kumar Kazanç Çarpanı' },
+    coinflip_min_bet:    { key: 'coinflip.min_bet',        isPercentage: false, defaultValue: 10,      displayName: 'Yazı-Tura Min Bahis'  },
+    coinflip_max_bet:    { key: 'coinflip.max_bet',        isPercentage: false, defaultValue: 1000000, displayName: 'Yazı-Tura Max Bahis'  },
+    coinflip_multiplier: { key: 'coinflip.multiplier',     isPercentage: false, defaultValue: 2.0,     displayName: 'Yazı-Tura Çarpanı'   },
+    slot_min_bet:        { key: 'slot.min_bet',            isPercentage: false, defaultValue: 100,     displayName: 'Slot Min Bahis'       },
+    slot_max_bet:        { key: 'slot.max_bet',            isPercentage: false, defaultValue: 1000000, displayName: 'Slot Max Bahis'       },
+    slot_jackpot:        { key: 'slot.jackpot_multiplier', isPercentage: false, defaultValue: 10,      displayName: 'Slot Jackpot Çarpanı' },
+};
+
+// Kazanma oranı % olarak alınıp 0.01-0.95 aralığında validate edilir
+function validateWinChancePct(pct) {
+    return Number.isFinite(pct) && pct >= 1 && pct <= 95;
+}
+
+function getKumarRiskLevel(ayarChoice, rawDeger) {
+    if (ayarChoice === 'gamble_win_chance' && rawDeger > 70) return 'high';
+    if ((ayarChoice === 'gamble_multiplier' || ayarChoice === 'coinflip_multiplier') && rawDeger > 3) return 'high';
+    if (ayarChoice === 'slot_jackpot' && rawDeger > 20) return 'high';
+    if ((['gamble_max_bet', 'coinflip_max_bet', 'slot_max_bet'].includes(ayarChoice)) && rawDeger > 500000) return 'high';
+    return 'normal';
+}
+
+function fmtKumarValue(ayarChoice, storedValue) {
+    const info = KUMAR_AYAR_MAP[ayarChoice];
+    if (!info) return String(storedValue);
+    if (info.isPercentage) return `%${Math.round(storedValue * 100)}`;
+    return formatNumber(storedValue);
+}
 
 function fmtMs(ms) {
     if (ms <= 0) return '🟢 Hazır';
@@ -383,6 +433,60 @@ module.exports = {
                         ]
                     }
                 ]
+            },
+            {
+                name: 'kumar',
+                description: 'Kumar sistemi yönetimi işlemleri.',
+                type: 2,
+                options: [
+                    {
+                        name: 'durum',
+                        description: 'Kumar sisteminin genel durumunu ve tüm ayarlarını gösterir.',
+                        type: 1,
+                        options: []
+                    },
+                    {
+                        name: 'ayar-goster',
+                        description: 'Tüm gambling kategorisi ayarlarını min/max/default ile listeler.',
+                        type: 1,
+                        options: []
+                    },
+                    {
+                        name: 'ayar-ayarla',
+                        description: 'Bir kumar ayarını değiştirir. Kazanma oranı için yüzde girin (45 = %45).',
+                        type: 1,
+                        options: [
+                            { name: 'ayar',  type: 3,  description: 'Değiştirilecek ayar.', required: true, choices: KUMAR_AYAR_CHOICES },
+                            { name: 'deger', type: 10, description: 'Yeni değer. Kazanma oranı için yüzde (1-95), diğerleri için doğrudan değer.', required: true, min_value: 0.01 },
+                            { name: 'sebep', type: 3,  description: 'İşlem sebebi.', required: true }
+                        ]
+                    },
+                    {
+                        name: 'ac',
+                        description: 'Kumar sistemini açar (/kumar /yazitura /slot aktif olur).',
+                        type: 1,
+                        options: [
+                            { name: 'sebep', type: 3, description: 'İşlem sebebi.', required: true }
+                        ]
+                    },
+                    {
+                        name: 'kapat',
+                        description: 'Kumar sistemini geçici olarak kapatır (/kumar /yazitura /slot devre dışı).',
+                        type: 1,
+                        options: [
+                            { name: 'sebep', type: 3, description: 'İşlem sebebi.', required: true }
+                        ]
+                    },
+                    {
+                        name: 'varsayilana-dondur',
+                        description: 'Bir kumar ayarını varsayılan değerine döndürür.',
+                        type: 1,
+                        options: [
+                            { name: 'ayar',  type: 3, description: 'Varsayılana döndürülecek ayar.', required: true, choices: KUMAR_AYAR_CHOICES },
+                            { name: 'sebep', type: 3, description: 'İşlem sebebi.', required: true }
+                        ]
+                    }
+                ]
             }
         ]
     },
@@ -433,6 +537,14 @@ module.exports = {
                 if (sub === 'global-goster')  return await handleBeklemeGlobalGoster(interaction);
                 if (sub === 'global-ayarla')  return await handleBeklemeGlobalAyarla(interaction);
                 if (sub === 'global-sifirla') return await handleBeklemeGlobalSifirla(interaction);
+            }
+            if (group === 'kumar') {
+                if (sub === 'durum')              return await handleKumarDurum(interaction);
+                if (sub === 'ayar-goster')        return await handleKumarAyarGoster(interaction);
+                if (sub === 'ayar-ayarla')        return await handleKumarAyarAyarla(interaction);
+                if (sub === 'ac')                 return await handleKumarAc(interaction);
+                if (sub === 'kapat')              return await handleKumarKapat(interaction);
+                if (sub === 'varsayilana-dondur') return await handleKumarVarsayilanaDondur(interaction);
             }
         } catch (err) {
             console.error(`/admin ${group} ${sub} hatası:`, err?.message ?? err);
@@ -1257,6 +1369,229 @@ async function handleBeklemeGlobalSifirla(interaction) {
     return interaction.editReply({
         embeds: [createEmbed('admin', '✅ Global Bekleme Sıfırlandı',
             `\`/${komut}\` — varsayılan değere döndürüldü.\n${oldS}s → **${defS}s**`
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+// ==================[ KUMAR İŞLEMLERİ ]==================
+
+async function handleKumarDurum(interaction) {
+    const [gamblingEnabled, gambleMin, gambleMax, winChance, winMultiplier,
+           coinMin, coinMax, coinMultiplier, slotMin, slotMax, slotJackpot, spamMs] = await Promise.all([
+        getBooleanSetting('system.gambling_enabled', true),
+        getNumberSetting('gamble.min_bet', 50),
+        getNumberSetting('gamble.max_bet', 1000000),
+        getNumberSetting('gamble.win_chance', 0.45),
+        getNumberSetting('gamble.win_multiplier', 2.0),
+        getNumberSetting('coinflip.min_bet', 10),
+        getNumberSetting('coinflip.max_bet', 1000000),
+        getNumberSetting('coinflip.multiplier', 2.0),
+        getNumberSetting('slot.min_bet', 100),
+        getNumberSetting('slot.max_bet', 1000000),
+        getNumberSetting('slot.jackpot_multiplier', 10),
+        getNumberSetting('cooldown.gamble_spam', 10000),
+    ]);
+
+    const statusIcon = gamblingEnabled ? '🟢 **AÇIK**' : '🔴 **KAPALI**';
+
+    const embed = createEmbed('admin', '🎰 Kumar Sistemi Durumu', `Sistem durumu: ${statusIcon}`)
+        .addFields(
+            { name: '🎲 Kumar (/kumar)',
+              value: `Min: ${formatNumber(gambleMin)} 🪙 · Max: ${formatNumber(gambleMax)} 🪙\nKazanma: %${Math.round(winChance*100)} · Çarpan: ${winMultiplier}x`,
+              inline: false },
+            { name: '🪙 Yazı-Tura (/yazitura)',
+              value: `Min: ${formatNumber(coinMin)} 🪙 · Max: ${formatNumber(coinMax)} 🪙\nKazanç çarpanı: ${coinMultiplier}x`,
+              inline: false },
+            { name: '🎰 Slot (/slot)',
+              value: `Min: ${formatNumber(slotMin)} 🪙 · Max: ${formatNumber(slotMax)} 🪙\nJackpot: ${slotJackpot}x · Üçlü: 4x · İkili: 1.5x`,
+              inline: false },
+            { name: '⏱️ Spam Koruması',
+              value: `${Math.round(spamMs / 1000)}s · Değiştirmek için \`/admin bekleme global-ayarla\` kullan.`,
+              inline: false }
+        )
+        .setFooter({ text: 'Kumar durumu — read-only' });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleKumarAyarGoster(interaction) {
+    const rows = await listSettings('gambling').catch(() => []);
+
+    if (rows.length === 0) {
+        return editInfo(interaction, '⚙️ Kumar Ayarları', 'Henüz ayar kaydedilmemiş. Varsayılan değerler kullanılıyor.');
+    }
+
+    const lines = rows.map(r => {
+        const val = r.value;
+        const def = r.default_value;
+        const isMod = val !== def ? ' *(değiştirilmiş)*' : '';
+        const range = (r.min_value !== null && r.max_value !== null)
+            ? ` [${r.min_value}–${r.max_value}]`
+            : '';
+        return `**${r.key}**: ${val} (varsayılan: ${def})${range}${isMod}`;
+    });
+
+    const embed = createEmbed('admin', '⚙️ Kumar Ayarları',
+        'Tüm gambling kategorisi ayarları. Değiştirmek için `/admin kumar ayar-ayarla` kullan.'
+    ).addFields({ name: '📋 Ayarlar', value: lines.join('\n').slice(0, 1024), inline: false })
+     .addFields({ name: 'ℹ️ Not', value: 'Cooldown ayarı `/admin bekleme global-ayarla komut:kumar` üzerinden yönetilir.', inline: false })
+     .setFooter({ text: 'Kumar ayar görüntüleme — read-only' });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleKumarAyarAyarla(interaction) {
+    const ayarChoice = interaction.options.getString('ayar');
+    const rawDeger   = interaction.options.getNumber('deger');
+    const sebep      = interaction.options.getString('sebep');
+
+    const ayarInfo = KUMAR_AYAR_MAP[ayarChoice];
+    if (!ayarInfo) return editError(interaction, `\`${ayarChoice}\` geçerli bir kumar ayarı değil.`);
+
+    // Değeri dönüştür ve validate et
+    let storedValue, displayOldValue, displayNewValue;
+
+    const currentRaw = await getNumberSetting(ayarInfo.key, ayarInfo.defaultValue);
+
+    if (ayarInfo.isPercentage) {
+        if (!validateWinChancePct(rawDeger)) {
+            return editError(interaction, `Kazanma oranı 1 ile 95 arasında yüzde olarak girilmeli (örn: 45 → %45).`);
+        }
+        storedValue = rawDeger / 100;
+        displayOldValue = `%${Math.round(currentRaw * 100)}`;
+        displayNewValue = `%${rawDeger}`;
+    } else {
+        storedValue = rawDeger;
+        displayOldValue = formatNumber(currentRaw);
+        displayNewValue = formatNumber(rawDeger);
+    }
+
+    const riskLevel = getKumarRiskLevel(ayarChoice, rawDeger);
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Kumar Ayarı Değiştir — Onay',
+        description: `\`${ayarInfo.key}\` ayarı değiştirilecek.`,
+        targetKey:   ayarInfo.key,
+        oldValue:    displayOldValue,
+        newValue:    displayNewValue,
+        reason:      sebep,
+        riskLevel
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Kumar ayarı değiştirme iptal edildi.');
+
+    try {
+        await setSetting(ayarInfo.key, String(storedValue), interaction.user.id, sebep);
+    } catch (err) {
+        return editError(interaction, err.message || 'Ayar kaydedilemedi.');
+    }
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Kumar Ayarı Güncellendi',
+            `\`${ayarInfo.key}\`\n${displayOldValue} → **${displayNewValue}**`
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+async function handleKumarAc(interaction) {
+    const sebep = interaction.options.getString('sebep');
+
+    const currentEnabled = await getBooleanSetting('system.gambling_enabled', true);
+    if (currentEnabled) {
+        return editInfo(interaction, 'ℹ️ Kumar Zaten Açık', 'Kumar sistemi halihazırda açık durumda.');
+    }
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Kumar Sistemini Aç — Onay',
+        description: 'Kumar sistemi açılacak. `/kumar`, `/yazitura` ve `/slot` tekrar kullanılabilir olacak.',
+        targetKey:   'system.gambling_enabled',
+        oldValue:    'false (kapalı)',
+        newValue:    'true (açık)',
+        reason:      sebep,
+        riskLevel:   'high'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Kumar açma işlemi gerçekleştirilmedi.');
+
+    try {
+        await setSetting('system.gambling_enabled', 'true', interaction.user.id, sebep);
+    } catch (err) {
+        return editError(interaction, err.message || 'Ayar kaydedilemedi.');
+    }
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Kumar Sistemi Açıldı',
+            '`/kumar`, `/yazitura` ve `/slot` komutları tekrar kullanılabilir.'
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+async function handleKumarKapat(interaction) {
+    const sebep = interaction.options.getString('sebep');
+
+    const currentEnabled = await getBooleanSetting('system.gambling_enabled', true);
+    if (!currentEnabled) {
+        return editInfo(interaction, 'ℹ️ Kumar Zaten Kapalı', 'Kumar sistemi halihazırda kapalı durumda.');
+    }
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Kumar Sistemini Kapat — Onay',
+        description: 'Kumar sistemi kapatılacak. `/kumar`, `/yazitura` ve `/slot` devre dışı kalacak.',
+        targetKey:   'system.gambling_enabled',
+        oldValue:    'true (açık)',
+        newValue:    'false (kapalı)',
+        reason:      sebep,
+        riskLevel:   'high'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Kumar kapatma işlemi gerçekleştirilmedi.');
+
+    try {
+        await setSetting('system.gambling_enabled', 'false', interaction.user.id, sebep);
+    } catch (err) {
+        return editError(interaction, err.message || 'Ayar kaydedilemedi.');
+    }
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Kumar Sistemi Kapatıldı',
+            '`/kumar`, `/yazitura` ve `/slot` komutları geçici olarak devre dışı.'
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+async function handleKumarVarsayilanaDondur(interaction) {
+    const ayarChoice = interaction.options.getString('ayar');
+    const sebep      = interaction.options.getString('sebep');
+
+    const ayarInfo = KUMAR_AYAR_MAP[ayarChoice];
+    if (!ayarInfo) return editError(interaction, `\`${ayarChoice}\` geçerli bir kumar ayarı değil.`);
+
+    const currentRaw = await getNumberSetting(ayarInfo.key, ayarInfo.defaultValue);
+
+    const displayOld = ayarInfo.isPercentage
+        ? `%${Math.round(currentRaw * 100)}`
+        : formatNumber(currentRaw);
+    const displayDef = ayarInfo.isPercentage
+        ? `%${Math.round(ayarInfo.defaultValue * 100)}`
+        : formatNumber(ayarInfo.defaultValue);
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Varsayılana Döndür — Onay',
+        description: `\`${ayarInfo.key}\` ayarı varsayılan değerine döndürülecek.`,
+        targetKey:   ayarInfo.key,
+        oldValue:    displayOld,
+        newValue:    `${displayDef} (varsayılan)`,
+        reason:      sebep,
+        riskLevel:   'normal'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Varsayılana döndürme iptal edildi.');
+
+    try {
+        await resetSetting(ayarInfo.key, interaction.user.id, sebep);
+    } catch (err) {
+        return editError(interaction, err.message || 'Ayar sıfırlanamadı.');
+    }
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Ayar Varsayılana Döndürüldü',
+            `\`${ayarInfo.key}\`\n${displayOld} → **${displayDef}**`
         ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
     });
 }

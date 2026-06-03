@@ -9,6 +9,7 @@ const { SLOT_MIN_BET, rollSlot } = require('../../services/gamblingService');
 const { grantCappedPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
 const { getRuntimeCooldown, setRuntimeCooldown, getGambleCooldownMs } = require('../../services/runtimeCooldownService');
+const { getNumberSetting, getBooleanSetting } = require('../../services/settingsService');
 
 module.exports = {
     data: {
@@ -17,10 +18,27 @@ module.exports = {
         options: [{ name: 'miktar', description: 'Bahis olarak koymak istediğin miktar.', type: 4, required: true }]
     },
     async execute(interaction) {
-        const amount = interaction.options.getInteger('miktar');
-        if (amount < SLOT_MIN_BET) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${fmtMoney(SLOT_MIN_BET)}.`)], flags: MessageFlags.Ephemeral });
+        const [gamblingEnabled, minBet, maxBet, jackpotMultiplier, gambleCooldownMs] = await Promise.all([
+            getBooleanSetting('system.gambling_enabled', true),
+            getNumberSetting('slot.min_bet', SLOT_MIN_BET),
+            getNumberSetting('slot.max_bet', 1000000),
+            getNumberSetting('slot.jackpot_multiplier', 10),
+            getGambleCooldownMs(),
+        ]);
 
-        const gambleCooldownMs = await getGambleCooldownMs();
+        if (!gamblingEnabled) {
+            return interaction.reply({
+                embeds: [createEmbed('warn', '🎲 Kumar Kapalı', 'Risk oyunları kısa süreliğine kapalı. Biraz sonra tekrar deneyebilirsin.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const amount = interaction.options.getInteger('miktar');
+        if (amount < minBet) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${fmtMoney(minBet)}.`)], flags: MessageFlags.Ephemeral });
+        if (maxBet > 0 && amount > maxBet) {
+            return interaction.reply({ embeds: [createEmbed('warn', '❌ Yüksek Bahis', `En yüksek bahis ${fmtMoney(maxBet)}.`)], flags: MessageFlags.Ephemeral });
+        }
+
         const leftMs = getRuntimeCooldown('slot', interaction.user.id);
         if (leftMs > 0) {
             const leftSec = Math.ceil(leftMs / 1000);
@@ -32,7 +50,7 @@ module.exports = {
         if (Number(userData.wallet) < amount) return interaction.reply({ embeds: [createEmbed('error', '❌ Yetersiz Bakiye', 'Cüzdanında yeterli paran yok.')], flags: MessageFlags.Ephemeral });
 
         const hasAmulet = await checkItem(interaction.user.id, 'lucky_amulet');
-        const spin = rollSlot();
+        const spin = rollSlot({ jackpotMultiplier });
         const slotResult = `[ ${spin.reels[0]} | ${spin.reels[1]} | ${spin.reels[2]} ]`;
 
         // Tılsım varsa tam kayıp durumunda %10 ihtimalle bahis iadesi

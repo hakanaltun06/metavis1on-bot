@@ -14,6 +14,7 @@ const {
 const { grantCappedPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
 const { getRuntimeCooldown, setRuntimeCooldown, getGambleCooldownMs } = require('../../services/runtimeCooldownService');
+const { getNumberSetting, getBooleanSetting } = require('../../services/settingsService');
 
 module.exports = {
     data: {
@@ -22,10 +23,31 @@ module.exports = {
         options: [{ name: 'miktar', description: 'Bahis olarak koymak istediğin miktar.', type: 4, required: true }]
     },
     async execute(interaction) {
-        const amount = interaction.options.getInteger('miktar');
-        if (amount < GAMBLE_MIN_BET) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${fmtMoney(GAMBLE_MIN_BET)}.`)], flags: MessageFlags.Ephemeral });
+        // Tüm ayarları paralel oku (DB erişilemezse fallback değerler kullanılır)
+        const [gamblingEnabled, minBet, maxBet, winChance, winMultiplier, gambleCooldownMs] = await Promise.all([
+            getBooleanSetting('system.gambling_enabled', true),
+            getNumberSetting('gamble.min_bet', GAMBLE_MIN_BET),
+            getNumberSetting('gamble.max_bet', 1000000),
+            getNumberSetting('gamble.win_chance', GAMBLE_WIN_CHANCE),
+            getNumberSetting('gamble.win_multiplier', GAMBLE_WIN_MULTIPLIER),
+            getGambleCooldownMs(),
+        ]);
 
-        const gambleCooldownMs = await getGambleCooldownMs();
+        if (!gamblingEnabled) {
+            return interaction.reply({
+                embeds: [createEmbed('warn', '🎲 Kumar Kapalı', 'Risk oyunları kısa süreliğine kapalı. Biraz sonra tekrar deneyebilirsin.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const amount = interaction.options.getInteger('miktar');
+        if (amount < minBet) {
+            return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${fmtMoney(minBet)}.`)], flags: MessageFlags.Ephemeral });
+        }
+        if (maxBet > 0 && amount > maxBet) {
+            return interaction.reply({ embeds: [createEmbed('warn', '❌ Yüksek Bahis', `En yüksek bahis ${fmtMoney(maxBet)}.`)], flags: MessageFlags.Ephemeral });
+        }
+
         const leftMs = getRuntimeCooldown('kumar', interaction.user.id);
         if (leftMs > 0) {
             const leftSec = Math.ceil(leftMs / 1000);
@@ -39,7 +61,7 @@ module.exports = {
         }
 
         const hasAmulet = await checkItem(interaction.user.id, 'lucky_amulet');
-        const finalChance = applyAmuletBonus(GAMBLE_WIN_CHANCE, hasAmulet > 0);
+        const finalChance = applyAmuletBonus(winChance, hasAmulet > 0);
 
         await pool.query('UPDATE economy_users SET gamble_count = gamble_count + 1 WHERE user_id = $1', [interaction.user.id]);
 
@@ -59,7 +81,7 @@ module.exports = {
         const win = Math.random() < finalChance;
 
         if (win) {
-            const profit = Math.floor(amount * GAMBLE_WIN_MULTIPLIER) - amount;
+            const profit = Math.floor(amount * winMultiplier) - amount;
             const newWallet = Number(userData.wallet) + profit;
             await addMoney(interaction.user.id, profit, 'wallet');
             const winEmbed = createEmbed('success', '🎲 Risk Tuttu', 'Bahsini katladın.')

@@ -10,13 +10,14 @@ const SLOT_MIN_BET = 100;
 const SLOT_EMOJIS = ['🍒', '🍋', '🍉', '⭐', '💎'];
 const LUCKY_AMULET_BONUS = 0.05;
 
-function rollSlot() {
+function rollSlot(options = {}) {
+    const jackpotMultiplier = options.jackpotMultiplier || 10;
     const a = SLOT_EMOJIS[rand(0, SLOT_EMOJIS.length - 1)];
     const b = SLOT_EMOJIS[rand(0, SLOT_EMOJIS.length - 1)];
     const c = SLOT_EMOJIS[rand(0, SLOT_EMOJIS.length - 1)];
     let multiplier = 0;
     if (a === b && b === c) {
-        multiplier = a === '💎' ? 10 : 4;
+        multiplier = a === '💎' ? jackpotMultiplier : 4;
     } else if (a === b || b === c || a === c) {
         multiplier = 1.5;
     }

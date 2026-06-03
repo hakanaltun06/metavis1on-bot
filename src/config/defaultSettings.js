@@ -209,7 +209,7 @@ const DEFAULT_SETTINGS = [
         valueType: 'integer',
         category: 'gambling',
         description: '/kumar minimum bahis miktarı.',
-        minValue: 1, maxValue: 10000000,
+        minValue: 1, maxValue: 100000,
         defaultValue: String(GAMBLE_MIN_BET),
         isSensitive: false
     },
@@ -251,8 +251,18 @@ const DEFAULT_SETTINGS = [
         valueType: 'integer',
         category: 'gambling',
         description: '/yazitura minimum bahis miktarı.',
-        minValue: 1, maxValue: 10000000,
+        minValue: 1, maxValue: 100000,
         defaultValue: String(COINFLIP_MIN_BET),
+        isSensitive: false
+    },
+    {
+        key: 'coinflip.max_bet',
+        value: '1000000',
+        valueType: 'integer',
+        category: 'gambling',
+        description: '/yazitura maksimum bahis miktarı.',
+        minValue: 100, maxValue: 10000000,
+        defaultValue: '1000000',
         isSensitive: false
     },
     {
@@ -271,8 +281,18 @@ const DEFAULT_SETTINGS = [
         valueType: 'integer',
         category: 'gambling',
         description: '/slot minimum bahis miktarı.',
-        minValue: 1, maxValue: 10000000,
+        minValue: 1, maxValue: 100000,
         defaultValue: String(SLOT_MIN_BET),
+        isSensitive: false
+    },
+    {
+        key: 'slot.max_bet',
+        value: '1000000',
+        valueType: 'integer',
+        category: 'gambling',
+        description: '/slot maksimum bahis miktarı.',
+        minValue: 100, maxValue: 10000000,
+        defaultValue: '1000000',
         isSensitive: false
     },
     {
