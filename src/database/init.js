@@ -151,10 +151,60 @@ async function initDB() {
                 ON economy_user_achievements(unlocked_at);
             CREATE INDEX IF NOT EXISTS idx_user_achievements_claimed
                 ON economy_user_achievements(claimed_at);
+
+            CREATE TABLE IF NOT EXISTS bot_settings (
+                id            SERIAL PRIMARY KEY,
+                key           TEXT NOT NULL UNIQUE,
+                value         TEXT NOT NULL,
+                value_type    TEXT NOT NULL DEFAULT 'text',
+                category      TEXT NOT NULL DEFAULT 'general',
+                description   TEXT,
+                is_sensitive  BOOLEAN NOT NULL DEFAULT false,
+                min_value     NUMERIC,
+                max_value     NUMERIC,
+                default_value TEXT NOT NULL,
+                updated_by    TEXT,
+                updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_bot_settings_category
+                ON bot_settings(category);
+
+            CREATE TABLE IF NOT EXISTS admin_logs (
+                id             SERIAL PRIMARY KEY,
+                action         TEXT NOT NULL,
+                category       TEXT NOT NULL DEFAULT 'general',
+                actor_id       TEXT NOT NULL,
+                target_user_id TEXT,
+                target_key     TEXT,
+                old_value      TEXT,
+                new_value      TEXT,
+                reason         TEXT,
+                metadata       JSONB DEFAULT '{}',
+                created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_admin_logs_actor
+                ON admin_logs(actor_id);
+            CREATE INDEX IF NOT EXISTS idx_admin_logs_target
+                ON admin_logs(target_user_id);
+            CREATE INDEX IF NOT EXISTS idx_admin_logs_category
+                ON admin_logs(category);
+            CREATE INDEX IF NOT EXISTS idx_admin_logs_created
+                ON admin_logs(created_at DESC);
         `);
         console.log('✅ Veritabanı tabloları hazır.');
     } finally {
         client.release();
+    }
+
+    // Default bot ayarlarını seed et (idempotent — mevcut değerleri ezmez)
+    try {
+        const { ensureDefaultSettings } = require('../services/settingsService');
+        await ensureDefaultSettings();
+    } catch (err) {
+        console.error('Default ayarlar seed edilemedi:', err && err.message ? err.message : err);
     }
 }
 
