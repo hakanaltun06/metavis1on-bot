@@ -8,6 +8,7 @@ const { getMins } = require('../../utils/time');
 const { COOLDOWNS } = require('../../utils/constants');
 const { rollBegResult } = require('../../services/rewardsService');
 const { grantCappedPoints } = require('../../services/seasonService');
+const { getNumberSetting } = require('../../services/settingsService');
 
 module.exports = {
     data: { name: 'dilen', description: 'Sokakta dilenirsin. Bazen işe yarar.' },
@@ -16,8 +17,9 @@ module.exports = {
         const now = new Date();
         const lastDate = userData.last_beg ? new Date(userData.last_beg) : new Date(0);
 
-        if (now - lastDate < COOLDOWNS.BEG) {
-            return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `İnsanlar şu an seninle uğraşmıyor. **${getMins(COOLDOWNS.BEG - (now - lastDate))} dk** sonra tekrar dene.`)], flags: MessageFlags.Ephemeral });
+        const effectiveCooldown = await getNumberSetting('cooldown.beg', COOLDOWNS.BEG);
+        if (now - lastDate < effectiveCooldown) {
+            return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `İnsanlar şu an seninle uğraşmıyor. **${getMins(effectiveCooldown - (now - lastDate))} dk** sonra tekrar dene.`)], flags: MessageFlags.Ephemeral });
         }
 
         await pool.query('UPDATE economy_users SET last_beg = CURRENT_TIMESTAMP WHERE user_id = $1', [interaction.user.id]);

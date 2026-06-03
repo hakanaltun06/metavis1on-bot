@@ -9,6 +9,7 @@ const { COOLDOWNS } = require('../../utils/constants');
 const { rollCrime } = require('../../services/riskService');
 const { grantSeasonPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
+const { getNumberSetting } = require('../../services/settingsService');
 
 module.exports = {
     data: { name: 'suc', description: 'Yasadışı işlere bulaşırsın. Kazanç büyük, risk yüksek.' },
@@ -17,8 +18,9 @@ module.exports = {
         const now = new Date();
         const lastDate = userData.last_crime ? new Date(userData.last_crime) : new Date(0);
 
-        if (now - lastDate < COOLDOWNS.CRIME) {
-            return interaction.reply({ embeds: [createEmbed('warn', '🚔 Ortalık Kızgın', `Polis peşinde. **${getMins(COOLDOWNS.CRIME - (now - lastDate))} dk** ortalıktan kaybol.`)], flags: MessageFlags.Ephemeral });
+        const effectiveCooldown = await getNumberSetting('cooldown.crime', COOLDOWNS.CRIME);
+        if (now - lastDate < effectiveCooldown) {
+            return interaction.reply({ embeds: [createEmbed('warn', '🚔 Ortalık Kızgın', `Polis peşinde. **${getMins(effectiveCooldown - (now - lastDate))} dk** ortalıktan kaybol.`)], flags: MessageFlags.Ephemeral });
         }
 
         await pool.query('UPDATE economy_users SET last_crime = CURRENT_TIMESTAMP WHERE user_id = $1', [interaction.user.id]);

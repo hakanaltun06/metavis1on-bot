@@ -80,6 +80,26 @@ const DEFAULT_SETTINGS = [
         isSensitive: false
     },
     {
+        key: 'cooldown.weekly',
+        value: String(COOLDOWNS.WEEKLY),
+        valueType: 'integer',
+        category: 'cooldown',
+        description: 'Haftalık ödül cooldown süresi (ms). /haftalik arası bekleme.',
+        minValue: 0, maxValue: 1209600000,
+        defaultValue: String(COOLDOWNS.WEEKLY),
+        isSensitive: false
+    },
+    {
+        key: 'cooldown.monthly',
+        value: String(COOLDOWNS.MONTHLY),
+        valueType: 'integer',
+        category: 'cooldown',
+        description: 'Aylık ödül cooldown süresi (ms). /aylik arası bekleme.',
+        minValue: 0, maxValue: 5184000000,
+        defaultValue: String(COOLDOWNS.MONTHLY),
+        isSensitive: false
+    },
+    {
         key: 'cooldown.interest',
         value: String(INTEREST_INTERVAL_MS),
         valueType: 'integer',

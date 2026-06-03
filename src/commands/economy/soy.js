@@ -14,6 +14,7 @@ const {
 } = require('../../services/riskService');
 const { grantCappedPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
+const { getNumberSetting } = require('../../services/settingsService');
 
 const ROB_SEASON_POINTS = { success: 18, caught: 6, shielded: 8 };
 
@@ -29,14 +30,15 @@ module.exports = {
         if (target.bot) return interaction.reply({ embeds: [createEmbed('warn', '❌ Olmaz', 'Botların üzerinde nakit taşımaz.')], flags: MessageFlags.Ephemeral });
 
         try {
+            const effectiveCooldown = await getNumberSetting('cooldown.rob', COOLDOWNS.ROB);
             const result = await withTx(async (db) => {
                 const userData = await ensureUser(interaction.user.id, db);
                 const targetData = await ensureUser(target.id, db);
 
                 const now = new Date();
                 const lastDate = userData.last_rob ? new Date(userData.last_rob) : new Date(0);
-                if (now - lastDate < COOLDOWNS.ROB) {
-                    return { kind: 'cooldown', leftMs: COOLDOWNS.ROB - (now - lastDate) };
+                if (now - lastDate < effectiveCooldown) {
+                    return { kind: 'cooldown', leftMs: effectiveCooldown - (now - lastDate) };
                 }
                 if (Number(userData.wallet) < ROB_SELF_MIN_WALLET) return { kind: 'self_poor' };
                 if (Number(targetData.wallet) < ROB_TARGET_MIN_WALLET) return { kind: 'target_poor' };

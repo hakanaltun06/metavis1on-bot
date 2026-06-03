@@ -19,11 +19,50 @@ const {
     adminInventoryOperation,
     adminSeasonPointsOperation,
     isValidItemCode,
-    getItemDisplayName
+    getItemDisplayName,
+    getAdminCooldownOverview,
+    getGlobalCooldownSettings,
+    resetUserCooldown,
+    resetAllUserCooldowns,
+    reduceUserCooldown,
+    extendUserCooldown,
+    setUserCooldownRemaining,
+    setGlobalCooldown,
+    resetGlobalCooldown,
+    COOLDOWN_COMMANDS,
+    MAX_USER_COOLDOWN_MS,
 } = require('../../services/adminControlService');
 const { getLoanRiskText } = require('../../services/loanService');
 
 // ==================[ YARDIMCI ]==================
+
+const KOMUT_CHOICES = [
+    { name: 'Günlük',   value: 'gunluk'   },
+    { name: 'Haftalık', value: 'haftalik' },
+    { name: 'Aylık',    value: 'aylik'    },
+    { name: 'Çalış',    value: 'calis'    },
+    { name: 'Dilen',    value: 'dilen'    },
+    { name: 'Suç',      value: 'suc'      },
+    { name: 'Soy',      value: 'soy'      },
+    { name: 'Faiz',     value: 'faiz'     },
+    { name: 'Kumar',    value: 'kumar'    },
+    { name: 'Yazı-Tura', value: 'yazitura' },
+    { name: 'Slot',     value: 'slot'     },
+];
+
+function fmtMs(ms) {
+    if (ms <= 0) return '🟢 Hazır';
+    const totalSec = Math.ceil(ms / 1000);
+    if (totalSec < 60) return `⏳ ${totalSec}s`;
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    if (mins < 60) return `⏳ ${mins}d ${secs}s`;
+    const hours = Math.floor(mins / 60);
+    const rem = mins % 60;
+    if (hours < 24) return `⏳ ${hours}sa ${rem}d`;
+    const days = Math.floor(hours / 24);
+    return `⏳ ${days}gün ${hours % 24}sa`;
+}
 
 function alanToField(alanOpt)  { return alanOpt === 'banka' ? 'bank' : 'wallet'; }
 function alanToLabel(field)    { return field === 'bank' ? 'Banka' : 'Cüzdan'; }
@@ -252,6 +291,98 @@ module.exports = {
                         ]
                     }
                 ]
+            },
+            {
+                name: 'bekleme',
+                description: 'Bekleme süresi yönetimi işlemleri.',
+                type: 2,
+                options: [
+                    {
+                        name: 'durum',
+                        description: 'Kullanıcının tüm bekleme sürelerini gösterir.',
+                        type: 1,
+                        options: [
+                            { name: 'kullanici', type: 6, description: 'Hedef kullanıcı.', required: true }
+                        ]
+                    },
+                    {
+                        name: 'sifirla',
+                        description: 'Kullanıcının belirli bir komut için bekleme süresini sıfırlar.',
+                        type: 1,
+                        options: [
+                            { name: 'kullanici', type: 6, description: 'Hedef kullanıcı.', required: true },
+                            { name: 'komut',     type: 3, description: 'Sıfırlanacak komut.', required: true, choices: KOMUT_CHOICES },
+                            { name: 'sebep',     type: 3, description: 'İşlem sebebi.', required: true }
+                        ]
+                    },
+                    {
+                        name: 'azalt',
+                        description: 'Kullanıcının bekleme süresini belirtilen saniye azaltır.',
+                        type: 1,
+                        options: [
+                            { name: 'kullanici', type: 6, description: 'Hedef kullanıcı.', required: true },
+                            { name: 'komut',     type: 3, description: 'Hedef komut.', required: true, choices: KOMUT_CHOICES },
+                            { name: 'sure',      type: 4, description: 'Azaltılacak süre (saniye).', required: true, min_value: 1 },
+                            { name: 'sebep',     type: 3, description: 'İşlem sebebi.', required: true }
+                        ]
+                    },
+                    {
+                        name: 'uzat',
+                        description: 'Kullanıcının bekleme süresini belirtilen saniye uzatır.',
+                        type: 1,
+                        options: [
+                            { name: 'kullanici', type: 6, description: 'Hedef kullanıcı.', required: true },
+                            { name: 'komut',     type: 3, description: 'Hedef komut.', required: true, choices: KOMUT_CHOICES },
+                            { name: 'sure',      type: 4, description: 'Uzatılacak süre (saniye).', required: true, min_value: 1 },
+                            { name: 'sebep',     type: 3, description: 'İşlem sebebi.', required: true }
+                        ]
+                    },
+                    {
+                        name: 'ayarla',
+                        description: 'Kullanıcının bekleme süresini belirtilen saniyeye ayarlar (0 = hazır).',
+                        type: 1,
+                        options: [
+                            { name: 'kullanici', type: 6, description: 'Hedef kullanıcı.', required: true },
+                            { name: 'komut',     type: 3, description: 'Hedef komut.', required: true, choices: KOMUT_CHOICES },
+                            { name: 'sure',      type: 4, description: 'Kalan süre (saniye, 0 = hazır).', required: true, min_value: 0 },
+                            { name: 'sebep',     type: 3, description: 'İşlem sebebi.', required: true }
+                        ]
+                    },
+                    {
+                        name: 'tumunu-sifirla',
+                        description: 'Kullanıcının tüm bekleme sürelerini sıfırlar.',
+                        type: 1,
+                        options: [
+                            { name: 'kullanici', type: 6, description: 'Hedef kullanıcı.', required: true },
+                            { name: 'sebep',     type: 3, description: 'İşlem sebebi.', required: true }
+                        ]
+                    },
+                    {
+                        name: 'global-goster',
+                        description: 'Tüm global bekleme süresi ayarlarını gösterir.',
+                        type: 1,
+                        options: []
+                    },
+                    {
+                        name: 'global-ayarla',
+                        description: 'Bir komutun global bekleme süresini değiştirir.',
+                        type: 1,
+                        options: [
+                            { name: 'komut', type: 3, description: 'Hedef komut.', required: true, choices: KOMUT_CHOICES },
+                            { name: 'sure',  type: 4, description: 'Yeni bekleme süresi (saniye).', required: true, min_value: 1 },
+                            { name: 'sebep', type: 3, description: 'İşlem sebebi.', required: true }
+                        ]
+                    },
+                    {
+                        name: 'global-sifirla',
+                        description: 'Bir komutun global bekleme süresini varsayılana döndürür.',
+                        type: 1,
+                        options: [
+                            { name: 'komut', type: 3, description: 'Hedef komut.', required: true, choices: KOMUT_CHOICES },
+                            { name: 'sebep', type: 3, description: 'İşlem sebebi.', required: true }
+                        ]
+                    }
+                ]
             }
         ]
     },
@@ -291,6 +422,17 @@ module.exports = {
                 if (sub === 'listele')   return await handleLogListele(interaction);
                 if (sub === 'kullanici') return await handleLogKullanici(interaction);
                 if (sub === 'aktor')     return await handleLogAktor(interaction);
+            }
+            if (group === 'bekleme') {
+                if (sub === 'durum')          return await handleBeklemeDurum(interaction);
+                if (sub === 'sifirla')        return await handleBeklemeSifirla(interaction);
+                if (sub === 'azalt')          return await handleBeklemeAzalt(interaction);
+                if (sub === 'uzat')           return await handleBeklemeUzat(interaction);
+                if (sub === 'ayarla')         return await handleBeklemeAyarla(interaction);
+                if (sub === 'tumunu-sifirla') return await handleBeklemeTumuSifirla(interaction);
+                if (sub === 'global-goster')  return await handleBeklemeGlobalGoster(interaction);
+                if (sub === 'global-ayarla')  return await handleBeklemeGlobalAyarla(interaction);
+                if (sub === 'global-sifirla') return await handleBeklemeGlobalSifirla(interaction);
             }
         } catch (err) {
             console.error(`/admin ${group} ${sub} hatası:`, err?.message ?? err);
@@ -838,4 +980,283 @@ async function handleLogAktor(interaction) {
 
     const embed = buildLogEmbed(`📋 ${actor.username} — İşlem Geçmişi (${logs.length})`, logs);
     return interaction.editReply({ embeds: [embed] });
+}
+
+// ==================[ BEKLEME İŞLEMLERİ ]==================
+
+async function handleBeklemeDurum(interaction) {
+    const target = interaction.options.getUser('kullanici');
+    const ov     = await getAdminCooldownOverview(target.id);
+
+    // Grup 1: Ödüller ve rutin (DB)
+    const group1 = ov.dbStatus.filter(s => ['gunluk', 'haftalik', 'aylik', 'calis', 'faiz'].includes(s.commandCode));
+    // Grup 2: Risk (DB)
+    const group2 = ov.dbStatus.filter(s => ['dilen', 'suc', 'soy'].includes(s.commandCode));
+    // Grup 3: Oyunlar (runtime)
+    const group3 = ov.runtimeStatus;
+
+    const fmt = arr => arr.map(s =>
+        `**/${s.commandCode}** (${s.displayName}) — ${fmtMs(s.leftMs)} · global: ${Math.round(s.effectiveCooldownMs / 1000)}s`
+    ).join('\n');
+
+    const embed = createEmbed('admin', `⏳ Bekleme Durumu — ${target.username}`, `<@${target.id}>`)
+        .addFields(
+            { name: '🏅 Ödüller ve İş',   value: fmt(group1).slice(0, 1024) || '—', inline: false },
+            { name: '⚡ Risk Komutları',   value: fmt(group2).slice(0, 1024) || '—', inline: false },
+            { name: '🎲 Oyunlar (anlık)',  value: fmt(group3).slice(0, 1024) || '—', inline: false }
+        )
+        .setFooter({ text: `Bekleme durumu — read-only · ID: ${target.id}` });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleBeklemeSifirla(interaction) {
+    const target = interaction.options.getUser('kullanici');
+    const komut  = interaction.options.getString('komut');
+    const sebep  = interaction.options.getString('sebep');
+    const cmd    = COOLDOWN_COMMANDS[komut];
+    if (!cmd) return editError(interaction, `\`${komut}\` geçerli bir komut kodu değil.`);
+
+    // Mevcut kalan süreyi hesapla (göstermek için)
+    const ov  = await getAdminCooldownOverview(target.id);
+    const all = [...ov.dbStatus, ...ov.runtimeStatus];
+    const cur = all.find(s => s.commandCode === komut);
+    const oldLeftMs = cur ? cur.leftMs : 0;
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Bekleme Sıfırla — Onay',
+        description: `**${target.username}** kullanıcısının \`/${komut}\` bekleme süresi sıfırlanacak.`,
+        target:      `${target.username} (<@${target.id}>)`,
+        targetKey:   `/${komut}`,
+        oldValue:    fmtMs(oldLeftMs),
+        newValue:    '🟢 Hazır',
+        reason:      sebep,
+        riskLevel:   'normal'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Bekleme sıfırlama işlemi gerçekleştirilmedi.');
+
+    const result = await resetUserCooldown({ userId: target.id, commandCode: komut, actorId: interaction.user.id, reason: sebep });
+    if (!result.ok) return editError(interaction, result.reason || 'İşlem gerçekleştirilemedi.');
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Bekleme Sıfırlandı',
+            `**${target.username}** · \`/${komut}\`\n${fmtMs(result.oldLeftMs)} → **🟢 Hazır**`
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+async function handleBeklemeAzalt(interaction) {
+    const target = interaction.options.getUser('kullanici');
+    const komut  = interaction.options.getString('komut');
+    const sure   = interaction.options.getInteger('sure');
+    const sebep  = interaction.options.getString('sebep');
+    const cmd    = COOLDOWN_COMMANDS[komut];
+    if (!cmd) return editError(interaction, `\`${komut}\` geçerli bir komut kodu değil.`);
+
+    const ov  = await getAdminCooldownOverview(target.id);
+    const all = [...ov.dbStatus, ...ov.runtimeStatus];
+    const cur = all.find(s => s.commandCode === komut);
+    const oldLeftMs = cur ? cur.leftMs : 0;
+    const newLeftMs = Math.max(0, oldLeftMs - sure * 1000);
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Bekleme Azalt — Onay',
+        description: `**${target.username}** kullanıcısının \`/${komut}\` bekleme süresi azaltılacak.`,
+        target:      `${target.username} (<@${target.id}>)`,
+        targetKey:   `/${komut}`,
+        oldValue:    fmtMs(oldLeftMs),
+        newValue:    fmtMs(newLeftMs),
+        reason:      sebep,
+        riskLevel:   'normal'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Bekleme azaltma işlemi gerçekleştirilmedi.');
+
+    const result = await reduceUserCooldown({ userId: target.id, commandCode: komut, seconds: sure, actorId: interaction.user.id, reason: sebep });
+    if (!result.ok) return editError(interaction, result.reason || 'İşlem gerçekleştirilemedi.');
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Bekleme Azaltıldı',
+            `**${target.username}** · \`/${komut}\`\n${fmtMs(result.oldLeftMs)} → **${fmtMs(result.newLeftMs)}**`
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+async function handleBeklemeUzat(interaction) {
+    const target = interaction.options.getUser('kullanici');
+    const komut  = interaction.options.getString('komut');
+    const sure   = interaction.options.getInteger('sure');
+    const sebep  = interaction.options.getString('sebep');
+    const cmd    = COOLDOWN_COMMANDS[komut];
+    if (!cmd) return editError(interaction, `\`${komut}\` geçerli bir komut kodu değil.`);
+
+    const ov  = await getAdminCooldownOverview(target.id);
+    const all = [...ov.dbStatus, ...ov.runtimeStatus];
+    const cur = all.find(s => s.commandCode === komut);
+    const oldLeftMs = cur ? cur.leftMs : 0;
+    const newLeftMs = Math.min(oldLeftMs + sure * 1000, MAX_USER_COOLDOWN_MS);
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Bekleme Uzat — Onay',
+        description: `**${target.username}** kullanıcısının \`/${komut}\` bekleme süresi uzatılacak.`,
+        target:      `${target.username} (<@${target.id}>)`,
+        targetKey:   `/${komut}`,
+        oldValue:    fmtMs(oldLeftMs),
+        newValue:    fmtMs(newLeftMs),
+        reason:      sebep,
+        riskLevel:   sure >= 3600 ? 'high' : 'normal'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Bekleme uzatma işlemi gerçekleştirilmedi.');
+
+    const result = await extendUserCooldown({ userId: target.id, commandCode: komut, seconds: sure, actorId: interaction.user.id, reason: sebep });
+    if (!result.ok) return editError(interaction, result.reason || 'İşlem gerçekleştirilemedi.');
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Bekleme Uzatıldı',
+            `**${target.username}** · \`/${komut}\`\n${fmtMs(result.oldLeftMs)} → **${fmtMs(result.newLeftMs)}**`
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+async function handleBeklemeAyarla(interaction) {
+    const target = interaction.options.getUser('kullanici');
+    const komut  = interaction.options.getString('komut');
+    const sure   = interaction.options.getInteger('sure');
+    const sebep  = interaction.options.getString('sebep');
+    const cmd    = COOLDOWN_COMMANDS[komut];
+    if (!cmd) return editError(interaction, `\`${komut}\` geçerli bir komut kodu değil.`);
+
+    const ov  = await getAdminCooldownOverview(target.id);
+    const all = [...ov.dbStatus, ...ov.runtimeStatus];
+    const cur = all.find(s => s.commandCode === komut);
+    const oldLeftMs = cur ? cur.leftMs : 0;
+    const newLeftMs = Math.min(sure * 1000, MAX_USER_COOLDOWN_MS);
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Bekleme Ayarla — Onay',
+        description: `**${target.username}** kullanıcısının \`/${komut}\` bekleme süresi belirtilen değere ayarlanacak.`,
+        target:      `${target.username} (<@${target.id}>)`,
+        targetKey:   `/${komut}`,
+        oldValue:    fmtMs(oldLeftMs),
+        newValue:    sure === 0 ? '🟢 Hazır' : fmtMs(newLeftMs),
+        reason:      sebep,
+        riskLevel:   sure >= 3600 ? 'high' : 'normal'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Bekleme ayarlama işlemi gerçekleştirilmedi.');
+
+    const result = await setUserCooldownRemaining({ userId: target.id, commandCode: komut, seconds: sure, actorId: interaction.user.id, reason: sebep });
+    if (!result.ok) return editError(interaction, result.reason || 'İşlem gerçekleştirilemedi.');
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Bekleme Ayarlandı',
+            `**${target.username}** · \`/${komut}\`\n${fmtMs(result.oldLeftMs)} → **${sure === 0 ? '🟢 Hazır' : fmtMs(result.newLeftMs)}**`
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+async function handleBeklemeTumuSifirla(interaction) {
+    const target = interaction.options.getUser('kullanici');
+    const sebep  = interaction.options.getString('sebep');
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Tüm Beklemeler Sıfırla — Onay',
+        description: `**${target.username}** kullanıcısının **tüm** bekleme süreleri sıfırlanacak.`,
+        target:      `${target.username} (<@${target.id}>)`,
+        oldValue:    '11 komutun bekleme süresi',
+        newValue:    '🟢 Tümü hazır',
+        reason:      sebep,
+        riskLevel:   'high'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Toplu bekleme sıfırlama gerçekleştirilmedi.');
+
+    const result = await resetAllUserCooldowns({ userId: target.id, actorId: interaction.user.id, reason: sebep });
+    if (!result.ok) return editError(interaction, result.reason || 'İşlem gerçekleştirilemedi.');
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Tüm Beklemeler Sıfırlandı',
+            `**${target.username}** kullanıcısının tüm bekleme süreleri sıfırlandı.`
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+async function handleBeklemeGlobalGoster(interaction) {
+    const settings = await getGlobalCooldownSettings();
+    const lines = settings.map(s => {
+        const isMod = s.currentMs !== s.defaultMs ? ' *(değiştirilmiş)*' : '';
+        return `**/${s.commandCode}** — ${s.currentS}s (varsayılan: ${s.defaultS}s)${isMod}`;
+    });
+
+    const embed = createEmbed('admin', '⚙️ Global Bekleme Süreleri',
+        'Tüm komutların aktif global bekleme süreleri. Değiştirmek için `/admin bekleme global-ayarla` kullan.'
+    ).addFields({ name: '📋 Ayarlar', value: lines.join('\n').slice(0, 1024), inline: false })
+     .setFooter({ text: 'Global bekleme görüntüleme — read-only' });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleBeklemeGlobalAyarla(interaction) {
+    const komut = interaction.options.getString('komut');
+    const sure  = interaction.options.getInteger('sure');
+    const sebep = interaction.options.getString('sebep');
+    const cmd   = COOLDOWN_COMMANDS[komut];
+    if (!cmd) return editError(interaction, `\`${komut}\` geçerli bir komut kodu değil.`);
+
+    const settings = await getGlobalCooldownSettings();
+    const cur = settings.find(s => s.commandCode === komut);
+    const oldS = cur ? cur.currentS : Math.round(cmd.defaultMs / 1000);
+    const newMs = sure * 1000;
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Global Bekleme Ayarla — Onay',
+        description: `\`/${komut}\` komutu için global bekleme süresi değiştirilecek. Tüm kullanıcıları etkiler.`,
+        targetKey:   `/${komut} — ${cmd.settingKey}`,
+        oldValue:    `${oldS}s`,
+        newValue:    `${sure}s`,
+        reason:      sebep,
+        riskLevel:   'high'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Global bekleme ayarlama işlemi gerçekleştirilmedi.');
+
+    const result = await setGlobalCooldown({ commandCode: komut, seconds: sure, actorId: interaction.user.id, reason: sebep });
+    if (!result.ok) return editError(interaction, result.reason || 'Ayar kaydedilemedi.');
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Global Bekleme Ayarlandı',
+            `\`/${komut}\` — ${cmd.settingKey}\n${oldS}s → **${sure}s**`
+        ).addFields(
+            { name: '📝 Sebep', value: sebep, inline: false },
+            { name: 'ℹ️ Not', value: 'Mevcut runtime cooldownlar eski süreyle devam eder. Yeni oturumlar yeni süreyi kullanır.', inline: false }
+        )]
+    });
+}
+
+async function handleBeklemeGlobalSifirla(interaction) {
+    const komut = interaction.options.getString('komut');
+    const sebep = interaction.options.getString('sebep');
+    const cmd   = COOLDOWN_COMMANDS[komut];
+    if (!cmd) return editError(interaction, `\`${komut}\` geçerli bir komut kodu değil.`);
+
+    const settings = await getGlobalCooldownSettings();
+    const cur = settings.find(s => s.commandCode === komut);
+    const oldS = cur ? cur.currentS : Math.round(cmd.defaultMs / 1000);
+    const defS = Math.round(cmd.defaultMs / 1000);
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       '⚠️ Global Bekleme Sıfırla — Onay',
+        description: `\`/${komut}\` komutu için global bekleme süresi varsayılana döndürülecek.`,
+        targetKey:   `/${komut} — ${cmd.settingKey}`,
+        oldValue:    `${oldS}s`,
+        newValue:    `${defS}s (varsayılan)`,
+        reason:      sebep,
+        riskLevel:   'high'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Global bekleme sıfırlama işlemi gerçekleştirilmedi.');
+
+    const result = await resetGlobalCooldown({ commandCode: komut, actorId: interaction.user.id, reason: sebep });
+    if (!result.ok) return editError(interaction, result.reason || 'Ayar sıfırlanamadı.');
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '✅ Global Bekleme Sıfırlandı',
+            `\`/${komut}\` — varsayılan değere döndürüldü.\n${oldS}s → **${defS}s**`
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
 }

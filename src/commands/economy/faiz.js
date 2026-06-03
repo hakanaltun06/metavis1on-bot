@@ -11,11 +11,13 @@ const {
     INTEREST_INTERVAL_MS,
     estimateInterest
 } = require('../../services/bankService');
+const { getNumberSetting } = require('../../services/settingsService');
 
 module.exports = {
     data: { name: 'faiz', description: 'Bankandaki paran üzerinden faiz alırsın.' },
     async execute(interaction) {
         try {
+            const effectiveCooldown = await getNumberSetting('cooldown.interest', INTEREST_INTERVAL_MS);
             const result = await withTx(async (db) => {
                 const u = await ensureUser(interaction.user.id, db);
                 const bank = Number(u.bank);
@@ -25,8 +27,8 @@ module.exports = {
 
                 const now = Date.now();
                 const lastMs = u.last_interest ? new Date(u.last_interest).getTime() : 0;
-                if (lastMs && now - lastMs < INTEREST_INTERVAL_MS) {
-                    return { kind: 'wait', leftMs: INTEREST_INTERVAL_MS - (now - lastMs) };
+                if (lastMs && now - lastMs < effectiveCooldown) {
+                    return { kind: 'wait', leftMs: effectiveCooldown - (now - lastMs) };
                 }
 
                 const interest = estimateInterest(bank);

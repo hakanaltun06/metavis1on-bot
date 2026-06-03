@@ -9,6 +9,7 @@ const { COOLDOWNS } = require('../../utils/constants');
 const { rollWorkReward } = require('../../services/rewardsService');
 const { grantSeasonPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
+const { getNumberSetting } = require('../../services/settingsService');
 
 const WORK_JOBS = [
     // Ofis / veri
@@ -55,8 +56,9 @@ module.exports = {
         const now = new Date();
         const lastDate = userData.last_work ? new Date(userData.last_work) : new Date(0);
 
-        if (now - lastDate < COOLDOWNS.WORK) {
-            const left = COOLDOWNS.WORK - (now - lastDate);
+        const effectiveCooldown = await getNumberSetting('cooldown.work', COOLDOWNS.WORK);
+        if (now - lastDate < effectiveCooldown) {
+            const left = effectiveCooldown - (now - lastDate);
             return interaction.reply({
                 embeds: [createEmbed('warn', '⏳ Biraz Dinlen',
                     `Yeni iş için **${getMins(left)} dakika** beklemen gerekiyor.\n\nBeklemeyi hızlandırmak için \`/kullan\` ile **Odak Kahvesi** veya **Enerji İçeceği** kullanabilirsin.`)],

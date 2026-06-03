@@ -7,6 +7,7 @@ const { fmtMoney } = require('../../utils/format');
 const { COOLDOWNS } = require('../../utils/constants');
 const { REWARDS } = require('../../services/rewardsService');
 const { grantSeasonPoints } = require('../../services/seasonService');
+const { getNumberSetting } = require('../../services/settingsService');
 
 module.exports = {
     data: { name: 'haftalik', description: 'Haftalık büyük ödülünü alırsın.' },
@@ -14,8 +15,9 @@ module.exports = {
         const userData = await ensureUser(interaction.user.id);
         const now = new Date();
         const lastDate = userData.last_weekly ? new Date(userData.last_weekly) : new Date(0);
-        if (now - lastDate < COOLDOWNS.WEEKLY) {
-            return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Haftalık ödül için **${Math.ceil((COOLDOWNS.WEEKLY - (now - lastDate))/86400000)} gün** beklemen gerek.`)], flags: MessageFlags.Ephemeral });
+        const effectiveCooldown = await getNumberSetting('cooldown.weekly', COOLDOWNS.WEEKLY);
+        if (now - lastDate < effectiveCooldown) {
+            return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Haftalık ödül için **${Math.ceil((effectiveCooldown - (now - lastDate))/86400000)} gün** beklemen gerek.`)], flags: MessageFlags.Ephemeral });
         }
         const reward = REWARDS.WEEKLY;
         await addMoney(interaction.user.id, reward, 'wallet');

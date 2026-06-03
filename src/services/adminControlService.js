@@ -20,7 +20,16 @@ const { calculateFillPct, BANK_LEVELS } = require('./bankService');
 const {
     isCrateItem, isRareItem, getRareItemByCode, getCrateByCode
 } = require('./crateService');
-const { SHOP_ITEMS } = require('../utils/constants');
+const { SHOP_ITEMS, COOLDOWNS } = require('../utils/constants');
+const { INTEREST_INTERVAL_MS } = require('./bankService');
+const { getNumberSetting, setSetting, resetSetting, listSettings } = require('./settingsService');
+const {
+    getRuntimeCooldown,
+    clearRuntimeCooldown,
+    clearAllRuntimeCooldowns,
+    setRuntimeCooldownRemaining,
+    getRuntimeCooldownStatus,
+} = require('./runtimeCooldownService');
 const { logAdminAction } = require('./adminLogService');
 
 // ==================[ YARDIMCI ]==================
@@ -299,6 +308,343 @@ async function adminSeasonPointsOperation({ userId, amount, mode, actorId, reaso
     return { ok: true, mode, oldPoints: currentPoints, newPoints, amount, seasonId: season.id };
 }
 
+// ==================[ COOLDOWN KOMUT HARİTASI ]==================
+
+// userField kesinlikle bu set'ten gelmeli — SQL injection koruması.
+const ALLOWED_USER_FIELDS = new Set([
+    'last_daily', 'last_weekly', 'last_monthly',
+    'last_work', 'last_beg', 'last_crime', 'last_rob', 'last_interest'
+]);
+
+const COOLDOWN_COMMANDS = {
+    gunluk:   { code: 'gunluk',   displayName: 'Günlük',   settingKey: 'cooldown.daily',       defaultMs: COOLDOWNS.DAILY,       storageType: 'db',      userField: 'last_daily'    },
+    haftalik: { code: 'haftalik', displayName: 'Haftalık',  settingKey: 'cooldown.weekly',      defaultMs: COOLDOWNS.WEEKLY,      storageType: 'db',      userField: 'last_weekly'   },
+    aylik:    { code: 'aylik',    displayName: 'Aylık',     settingKey: 'cooldown.monthly',     defaultMs: COOLDOWNS.MONTHLY,     storageType: 'db',      userField: 'last_monthly'  },
+    calis:    { code: 'calis',    displayName: 'Çalış',     settingKey: 'cooldown.work',        defaultMs: COOLDOWNS.WORK,        storageType: 'db',      userField: 'last_work'     },
+    dilen:    { code: 'dilen',    displayName: 'Dilen',     settingKey: 'cooldown.beg',         defaultMs: COOLDOWNS.BEG,         storageType: 'db',      userField: 'last_beg'      },
+    suc:      { code: 'suc',      displayName: 'Suç',       settingKey: 'cooldown.crime',       defaultMs: COOLDOWNS.CRIME,       storageType: 'db',      userField: 'last_crime'    },
+    soy:      { code: 'soy',      displayName: 'Soy',       settingKey: 'cooldown.rob',         defaultMs: COOLDOWNS.ROB,         storageType: 'db',      userField: 'last_rob'      },
+    faiz:     { code: 'faiz',     displayName: 'Faiz',      settingKey: 'cooldown.interest',    defaultMs: INTEREST_INTERVAL_MS,  storageType: 'db',      userField: 'last_interest' },
+    kumar:    { code: 'kumar',    displayName: 'Kumar',     settingKey: 'cooldown.gamble_spam', defaultMs: COOLDOWNS.GAMBLE_SPAM, storageType: 'runtime', userField: null            },
+    yazitura: { code: 'yazitura', displayName: 'Yazı-Tura', settingKey: 'cooldown.gamble_spam', defaultMs: COOLDOWNS.GAMBLE_SPAM, storageType: 'runtime', userField: null            },
+    slot:     { code: 'slot',     displayName: 'Slot',      settingKey: 'cooldown.gamble_spam', defaultMs: COOLDOWNS.GAMBLE_SPAM, storageType: 'runtime', userField: null            },
+};
+
+const MAX_USER_COOLDOWN_MS = 7 * 24 * 3600 * 1000;  // 7 gün
+const MAX_GLOBAL_COOLDOWN_S = 30 * 24 * 3600;        // 30 gün (saniye)
+
+// ==================[ COOLDOWN YARDIMCI ]==================
+
+async function _getEffectiveCooldown(cmd) {
+    return getNumberSetting(cmd.settingKey, cmd.defaultMs).catch(() => cmd.defaultMs);
+}
+
+function _computeLeftMs(lastTs, effectiveCooldownMs) {
+    const now = Date.now();
+    const lastMs = lastTs ? new Date(lastTs).getTime() : 0;
+    const elapsed = now - lastMs;
+    return elapsed < effectiveCooldownMs ? effectiveCooldownMs - elapsed : 0;
+}
+
+// DB'de last_* alanını güvenli şekilde günceller.
+// newLastMs: null → NULL (hazır), number → ilgili timestamp
+async function _setLastField(userId, field, newLastMs, db) {
+    if (!ALLOWED_USER_FIELDS.has(field)) throw new Error('Geçersiz cooldown alanı.');
+    if (newLastMs === null) {
+        // Field adı whitelist'ten geldiği için template literal güvenlidir.
+        await db.query(`UPDATE economy_users SET ${field} = NULL WHERE user_id = $1`, [userId]);
+    } else {
+        await db.query(
+            `UPDATE economy_users SET ${field} = to_timestamp($1 / 1000.0) WHERE user_id = $2`,
+            [Math.floor(newLastMs), userId]
+        );
+    }
+}
+
+// targetMs'yi DB timestamp'ine çevir ve güncelle.
+async function _applyDbCooldown(userId, cmd, effectiveCooldownMs, targetMs) {
+    const clamped = Math.max(0, Math.min(targetMs, MAX_USER_COOLDOWN_MS));
+    const newLastMs = clamped === 0 ? null : (Date.now() - effectiveCooldownMs + clamped);
+    await withTx(async (db) => {
+        await _setLastField(userId, cmd.userField, newLastMs, db);
+    });
+    return clamped;
+}
+
+// ==================[ COOLDOWN OKUMA ]==================
+
+async function getAdminCooldownOverview(userId) {
+    const dbCmds = Object.values(COOLDOWN_COMMANDS).filter(c => c.storageType === 'db');
+
+    // Paralel: kullanıcı verisi + tüm DB cooldown ayarları
+    const [userData, ...effectiveMs] = await Promise.all([
+        ensureUser(userId),
+        ...dbCmds.map(cmd => _getEffectiveCooldown(cmd))
+    ]);
+
+    // Gamble spam ayarı (kumar/yazitura/slot için ortak)
+    const gambleMs = await _getEffectiveCooldown(COOLDOWN_COMMANDS.kumar);
+
+    const dbStatus = dbCmds.map((cmd, i) => {
+        const eff = effectiveMs[i];
+        const leftMs = _computeLeftMs(userData[cmd.userField], eff);
+        return {
+            commandCode:       cmd.code,
+            displayName:       cmd.displayName,
+            leftMs,
+            effectiveCooldownMs: eff,
+            defaultMs:         cmd.defaultMs,
+            lastTimestamp:     userData[cmd.userField] || null,
+            ready:             leftMs === 0,
+        };
+    });
+
+    const runtimeStatus = getRuntimeCooldownStatus(userId).map(rs => ({
+        ...rs,
+        displayName:         COOLDOWN_COMMANDS[rs.commandCode].displayName,
+        effectiveCooldownMs: gambleMs,
+        defaultMs:           COOLDOWNS.GAMBLE_SPAM,
+    }));
+
+    return { dbStatus, runtimeStatus };
+}
+
+async function getGlobalCooldownSettings() {
+    // Tüm cooldown kategorisindeki ayarları oku
+    const rows = await listSettings('cooldown').catch(() => []);
+    return Object.values(COOLDOWN_COMMANDS).map(cmd => {
+        const row = rows.find(r => r.key === cmd.settingKey);
+        const currentMs = row ? Number(row.value) : cmd.defaultMs;
+        return {
+            commandCode: cmd.code,
+            displayName: cmd.displayName,
+            settingKey:  cmd.settingKey,
+            currentMs,
+            defaultMs:   cmd.defaultMs,
+            currentS:    Math.round(currentMs / 1000),
+            defaultS:    Math.round(cmd.defaultMs / 1000),
+        };
+    });
+}
+
+// ==================[ KULLANICI BAZLI COOLDOWN MUTASYONU ]==================
+
+async function resetUserCooldown({ userId, commandCode, actorId, reason }) {
+    const cmd = COOLDOWN_COMMANDS[commandCode];
+    if (!cmd) return { ok: false, reason: `Bilinmeyen komut: "${commandCode}"` };
+
+    if (cmd.storageType === 'runtime') {
+        const oldLeftMs = getRuntimeCooldown(commandCode, userId);
+        clearRuntimeCooldown(commandCode, userId);
+        await logAdminAction({
+            action: 'admin.cooldown.reset', category: 'cooldown',
+            actorId, targetUserId: userId, targetKey: commandCode,
+            oldValue: String(Math.ceil(oldLeftMs / 1000)) + 's', newValue: '0s', reason,
+            metadata: { commandCode, settingKey: cmd.settingKey, oldRemainingMs: oldLeftMs, newRemainingMs: 0 },
+        }).catch(e => console.error('resetUserCooldown log hatası:', e?.message));
+        return { ok: true, oldLeftMs, newLeftMs: 0 };
+    }
+
+    // DB storage
+    const userData = await ensureUser(userId);
+    const eff = await _getEffectiveCooldown(cmd);
+    const oldLeftMs = _computeLeftMs(userData[cmd.userField], eff);
+    await _applyDbCooldown(userId, cmd, eff, 0);
+
+    await logAdminAction({
+        action: 'admin.cooldown.reset', category: 'cooldown',
+        actorId, targetUserId: userId, targetKey: commandCode,
+        oldValue: String(Math.ceil(oldLeftMs / 1000)) + 's', newValue: '0s', reason,
+        metadata: { commandCode, settingKey: cmd.settingKey, oldRemainingMs: oldLeftMs, newRemainingMs: 0 },
+    }).catch(e => console.error('resetUserCooldown log hatası:', e?.message));
+
+    return { ok: true, oldLeftMs, newLeftMs: 0 };
+}
+
+async function resetAllUserCooldowns({ userId, actorId, reason }) {
+    const allCodes = Object.keys(COOLDOWN_COMMANDS);
+    const results = {};
+
+    // Runtime cooldownları sıfırla
+    clearAllRuntimeCooldowns(userId);
+    for (const code of ['kumar', 'yazitura', 'slot']) results[code] = 0;
+
+    // DB cooldownları sıfırla
+    const userData = await ensureUser(userId);
+    const dbCmds = Object.values(COOLDOWN_COMMANDS).filter(c => c.storageType === 'db');
+    const effectiveMs = await Promise.all(dbCmds.map(cmd => _getEffectiveCooldown(cmd)));
+
+    await withTx(async (db) => {
+        for (const cmd of dbCmds) {
+            await _setLastField(userId, cmd.userField, null, db);
+        }
+    });
+
+    dbCmds.forEach((cmd, i) => {
+        results[cmd.code] = _computeLeftMs(userData[cmd.userField], effectiveMs[i]);
+    });
+
+    await logAdminAction({
+        action: 'admin.cooldown.reset_all', category: 'cooldown',
+        actorId, targetUserId: userId,
+        oldValue: JSON.stringify(
+            Object.fromEntries(dbCmds.map((cmd, i) => [cmd.code, Math.ceil(_computeLeftMs(userData[cmd.userField], effectiveMs[i]) / 1000)]))
+        ),
+        newValue: '0s (tümü)',
+        reason,
+        metadata: { commandCodes: allCodes, resetAt: new Date().toISOString() },
+    }).catch(e => console.error('resetAllUserCooldowns log hatası:', e?.message));
+
+    return { ok: true, results };
+}
+
+async function reduceUserCooldown({ userId, commandCode, seconds, actorId, reason }) {
+    const cmd = COOLDOWN_COMMANDS[commandCode];
+    if (!cmd) return { ok: false, reason: `Bilinmeyen komut: "${commandCode}"` };
+    if (!seconds || seconds < 1) return { ok: false, reason: 'Süre en az 1 saniye olmalı.' };
+
+    if (cmd.storageType === 'runtime') {
+        const oldLeftMs = getRuntimeCooldown(commandCode, userId);
+        const newLeftMs = Math.max(0, oldLeftMs - seconds * 1000);
+        setRuntimeCooldownRemaining(commandCode, userId, newLeftMs);
+        await logAdminAction({
+            action: 'admin.cooldown.reduce', category: 'cooldown',
+            actorId, targetUserId: userId, targetKey: commandCode,
+            oldValue: String(Math.ceil(oldLeftMs / 1000)) + 's',
+            newValue: String(Math.ceil(newLeftMs / 1000)) + 's',
+            reason,
+            metadata: { commandCode, settingKey: cmd.settingKey, seconds, oldRemainingMs: oldLeftMs, newRemainingMs: newLeftMs },
+        }).catch(e => console.error('reduceUserCooldown log hatası:', e?.message));
+        return { ok: true, oldLeftMs, newLeftMs };
+    }
+
+    const userData = await ensureUser(userId);
+    const eff = await _getEffectiveCooldown(cmd);
+    const oldLeftMs = _computeLeftMs(userData[cmd.userField], eff);
+    const newLeftMs = Math.max(0, oldLeftMs - seconds * 1000);
+    await _applyDbCooldown(userId, cmd, eff, newLeftMs);
+
+    await logAdminAction({
+        action: 'admin.cooldown.reduce', category: 'cooldown',
+        actorId, targetUserId: userId, targetKey: commandCode,
+        oldValue: String(Math.ceil(oldLeftMs / 1000)) + 's',
+        newValue: String(Math.ceil(newLeftMs / 1000)) + 's',
+        reason,
+        metadata: { commandCode, settingKey: cmd.settingKey, seconds, oldRemainingMs: oldLeftMs, newRemainingMs: newLeftMs },
+    }).catch(e => console.error('reduceUserCooldown log hatası:', e?.message));
+
+    return { ok: true, oldLeftMs, newLeftMs };
+}
+
+async function extendUserCooldown({ userId, commandCode, seconds, actorId, reason }) {
+    const cmd = COOLDOWN_COMMANDS[commandCode];
+    if (!cmd) return { ok: false, reason: `Bilinmeyen komut: "${commandCode}"` };
+    if (!seconds || seconds < 1) return { ok: false, reason: 'Süre en az 1 saniye olmalı.' };
+
+    if (cmd.storageType === 'runtime') {
+        const oldLeftMs = getRuntimeCooldown(commandCode, userId);
+        const newLeftMs = Math.min(oldLeftMs + seconds * 1000, MAX_USER_COOLDOWN_MS);
+        setRuntimeCooldownRemaining(commandCode, userId, newLeftMs);
+        await logAdminAction({
+            action: 'admin.cooldown.extend', category: 'cooldown',
+            actorId, targetUserId: userId, targetKey: commandCode,
+            oldValue: String(Math.ceil(oldLeftMs / 1000)) + 's',
+            newValue: String(Math.ceil(newLeftMs / 1000)) + 's',
+            reason,
+            metadata: { commandCode, settingKey: cmd.settingKey, seconds, oldRemainingMs: oldLeftMs, newRemainingMs: newLeftMs },
+        }).catch(e => console.error('extendUserCooldown log hatası:', e?.message));
+        return { ok: true, oldLeftMs, newLeftMs };
+    }
+
+    const userData = await ensureUser(userId);
+    const eff = await _getEffectiveCooldown(cmd);
+    const oldLeftMs = _computeLeftMs(userData[cmd.userField], eff);
+    const newLeftMs = Math.min(oldLeftMs + seconds * 1000, MAX_USER_COOLDOWN_MS);
+    await _applyDbCooldown(userId, cmd, eff, newLeftMs);
+
+    await logAdminAction({
+        action: 'admin.cooldown.extend', category: 'cooldown',
+        actorId, targetUserId: userId, targetKey: commandCode,
+        oldValue: String(Math.ceil(oldLeftMs / 1000)) + 's',
+        newValue: String(Math.ceil(newLeftMs / 1000)) + 's',
+        reason,
+        metadata: { commandCode, settingKey: cmd.settingKey, seconds, oldRemainingMs: oldLeftMs, newRemainingMs: newLeftMs },
+    }).catch(e => console.error('extendUserCooldown log hatası:', e?.message));
+
+    return { ok: true, oldLeftMs, newLeftMs };
+}
+
+async function setUserCooldownRemaining({ userId, commandCode, seconds, actorId, reason }) {
+    const cmd = COOLDOWN_COMMANDS[commandCode];
+    if (!cmd) return { ok: false, reason: `Bilinmeyen komut: "${commandCode}"` };
+    if (seconds < 0) return { ok: false, reason: 'Süre negatif olamaz.' };
+
+    const targetMs = Math.min(seconds * 1000, MAX_USER_COOLDOWN_MS);
+
+    if (cmd.storageType === 'runtime') {
+        const oldLeftMs = getRuntimeCooldown(commandCode, userId);
+        setRuntimeCooldownRemaining(commandCode, userId, targetMs);
+        await logAdminAction({
+            action: 'admin.cooldown.set', category: 'cooldown',
+            actorId, targetUserId: userId, targetKey: commandCode,
+            oldValue: String(Math.ceil(oldLeftMs / 1000)) + 's',
+            newValue: String(seconds) + 's',
+            reason,
+            metadata: { commandCode, settingKey: cmd.settingKey, seconds, oldRemainingMs: oldLeftMs, newRemainingMs: targetMs },
+        }).catch(e => console.error('setUserCooldownRemaining log hatası:', e?.message));
+        return { ok: true, oldLeftMs, newLeftMs: targetMs };
+    }
+
+    const userData = await ensureUser(userId);
+    const eff = await _getEffectiveCooldown(cmd);
+    const oldLeftMs = _computeLeftMs(userData[cmd.userField], eff);
+    await _applyDbCooldown(userId, cmd, eff, targetMs);
+
+    await logAdminAction({
+        action: 'admin.cooldown.set', category: 'cooldown',
+        actorId, targetUserId: userId, targetKey: commandCode,
+        oldValue: String(Math.ceil(oldLeftMs / 1000)) + 's',
+        newValue: String(seconds) + 's',
+        reason,
+        metadata: { commandCode, settingKey: cmd.settingKey, seconds, oldRemainingMs: oldLeftMs, newRemainingMs: targetMs },
+    }).catch(e => console.error('setUserCooldownRemaining log hatası:', e?.message));
+
+    return { ok: true, oldLeftMs, newLeftMs: targetMs };
+}
+
+// ==================[ GLOBAL COOLDOWN YÖNETİMİ ]==================
+
+// settingsService.setSetting kendi admin_logs kaydını 'settings' kategorisinde yazıyor.
+// Ayrıca admin.cooldown.global_set logu yazılmıyor — çift kayıt önleme.
+async function setGlobalCooldown({ commandCode, seconds, actorId, reason }) {
+    const cmd = COOLDOWN_COMMANDS[commandCode];
+    if (!cmd) return { ok: false, reason: `Bilinmeyen komut: "${commandCode}"` };
+    if (!seconds || seconds < 1) return { ok: false, reason: 'Süre en az 1 saniye olmalı.' };
+    if (seconds > MAX_GLOBAL_COOLDOWN_S) {
+        return { ok: false, reason: `Süre en fazla ${MAX_GLOBAL_COOLDOWN_S / 86400} gün (${MAX_GLOBAL_COOLDOWN_S}s) olabilir.` };
+    }
+
+    const newMs = seconds * 1000;
+    try {
+        const res = await setSetting(cmd.settingKey, String(newMs), actorId, reason);
+        return { ok: true, commandCode, settingKey: cmd.settingKey, newMs, oldMs: res.oldValue ? Number(res.oldValue) : null };
+    } catch (err) {
+        return { ok: false, reason: err.message || 'Ayar kaydedilemedi.' };
+    }
+}
+
+async function resetGlobalCooldown({ commandCode, actorId, reason }) {
+    const cmd = COOLDOWN_COMMANDS[commandCode];
+    if (!cmd) return { ok: false, reason: `Bilinmeyen komut: "${commandCode}"` };
+
+    try {
+        const res = await resetSetting(cmd.settingKey, actorId, reason);
+        return { ok: true, commandCode, settingKey: cmd.settingKey, defaultMs: cmd.defaultMs, oldMs: res.oldValue ? Number(res.oldValue) : null };
+    } catch (err) {
+        return { ok: false, reason: err.message || 'Ayar sıfırlanamadı.' };
+    }
+}
+
 module.exports = {
     isValidItemCode,
     getItemDisplayName,
@@ -309,4 +655,17 @@ module.exports = {
     adminMoneyOperation,
     adminInventoryOperation,
     adminSeasonPointsOperation,
+    // Cooldown
+    COOLDOWN_COMMANDS,
+    MAX_USER_COOLDOWN_MS,
+    MAX_GLOBAL_COOLDOWN_S,
+    getAdminCooldownOverview,
+    getGlobalCooldownSettings,
+    resetUserCooldown,
+    resetAllUserCooldowns,
+    reduceUserCooldown,
+    extendUserCooldown,
+    setUserCooldownRemaining,
+    setGlobalCooldown,
+    resetGlobalCooldown,
 };

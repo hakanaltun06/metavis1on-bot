@@ -8,6 +8,7 @@ const { COOLDOWNS } = require('../../utils/constants');
 const { computeDailyReward, REWARDS } = require('../../services/rewardsService');
 const { grantSeasonPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
+const { getNumberSetting } = require('../../services/settingsService');
 
 module.exports = {
     data: { name: 'gunluk', description: 'Günlük ödülünü alırsın ve serini korursun.' },
@@ -18,8 +19,9 @@ module.exports = {
         const diffMs = now - lastDaily;
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-        if (diffMs < COOLDOWNS.DAILY) {
-            const left = COOLDOWNS.DAILY - diffMs;
+        const effectiveCooldown = await getNumberSetting('cooldown.daily', COOLDOWNS.DAILY);
+        if (diffMs < effectiveCooldown) {
+            const left = effectiveCooldown - diffMs;
             const hours = Math.floor(left / 3600000);
             const mins = Math.floor((left % 3600000) / 60000);
             return interaction.reply({ embeds: [createEmbed('warn', '⏳ Bekleme Süresi', `Günlük ödülünü zaten aldın. **${hours} saat ${mins} dakika** sonra tekrar uğra.`)], flags: MessageFlags.Ephemeral });

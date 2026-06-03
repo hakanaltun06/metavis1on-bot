@@ -5,7 +5,6 @@ const { addMoney, removeMoney } = require('../../database/money');
 const { checkItem } = require('../../database/inventory');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
-const { COOLDOWNS } = require('../../utils/constants');
 const {
     GAMBLE_MIN_BET,
     GAMBLE_WIN_CHANCE,
@@ -14,8 +13,7 @@ const {
 } = require('../../services/gamblingService');
 const { grantCappedPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
-
-const gambleCooldowns = new Map();
+const { getRuntimeCooldown, setRuntimeCooldown, getGambleCooldownMs } = require('../../services/runtimeCooldownService');
 
 module.exports = {
     data: {
@@ -27,13 +25,13 @@ module.exports = {
         const amount = interaction.options.getInteger('miktar');
         if (amount < GAMBLE_MIN_BET) return interaction.reply({ embeds: [createEmbed('warn', '❌ Düşük Bahis', `En düşük bahis ${fmtMoney(GAMBLE_MIN_BET)}.`)], flags: MessageFlags.Ephemeral });
 
-        const nowMs = Date.now();
-        const lastGamble = gambleCooldowns.get(interaction.user.id) || 0;
-        if (nowMs - lastGamble < COOLDOWNS.GAMBLE_SPAM) {
-            const leftSec = Math.ceil((COOLDOWNS.GAMBLE_SPAM - (nowMs - lastGamble)) / 1000);
+        const gambleCooldownMs = await getGambleCooldownMs();
+        const leftMs = getRuntimeCooldown('kumar', interaction.user.id);
+        if (leftMs > 0) {
+            const leftSec = Math.ceil(leftMs / 1000);
             return interaction.reply({ embeds: [createEmbed('warn', '⏳ Biraz Bekle', `Bir sonraki kumar için **${leftSec} saniye** beklemen gerek.`)], flags: MessageFlags.Ephemeral });
         }
-        gambleCooldowns.set(interaction.user.id, nowMs);
+        setRuntimeCooldown('kumar', interaction.user.id, gambleCooldownMs);
 
         const userData = await ensureUser(interaction.user.id);
         if (Number(userData.wallet) < amount) {
