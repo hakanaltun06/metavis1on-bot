@@ -1,7 +1,10 @@
 const { pool } = require('../database/pool');
 const { withTx } = require('../database/tx');
 const { addItem } = require('../database/inventory');
+const { addMoney } = require('../database/money');
+const { ensureUser } = require('../database/users');
 const { isSystemEnabled } = require('./settingsService');
+const { getSeasonRewardByLevel, VALID_CRATE_CODES } = require('../config/seasonRewards');
 
 // ================== [ SEZON SEVİYE EŞİKLERİ ] ==================
 // 30 seviyeli progresif XP eğrisi — Sezon 2.0
@@ -592,7 +595,7 @@ async function distributeSeasonRewards(seasonId, db = pool) {
 }
 
 // ================== [ SEVİYE ÖDÜL CLAIM TAKİBİ ] ==================
-// Kullanıcının claim ettiği sezon seviyelerini döndürür — 8.22 ödül yolu için
+// Kullanıcının claim ettiği sezon seviyelerini döndürür
 async function getClaimedLevels(userId, seasonId, db = pool) {
     try {
         if (!userId || !seasonId) return [];
@@ -607,9 +610,92 @@ async function getClaimedLevels(userId, seasonId, db = pool) {
     }
 }
 
-// Duplicate korumalı seviye ödülü claim kaydı — 8.22'de gerçek ödül dağıtımı eklenecek
-// Bu aşamada sadece claim kaydı oluşturur; coin/kasa verilmez.
-async function claimLevelReward(userId, seasonId, level, reward = null, db = pool) {
+// ================== [ ÖDÜL UYGULAMA HELPERLARI ] ==================
+// Tek reward entry uygular (coin/crate/item/badge); txClient transaction içinde çalışmalı
+async function _applyRewardEntry(userId, r, txClient) {
+    if (r.type === 'coin') {
+        const amount = Math.min(100000, Math.max(1, Math.floor(Number(r.amount) || 0)));
+        if (amount > 0) await addMoney(userId, amount, 'wallet', txClient);
+        return { type: 'coin', amount };
+    }
+    if (r.type === 'crate' || r.type === 'item') {
+        if (!r.itemCode || !VALID_CRATE_CODES.has(r.itemCode)) {
+            throw new Error(`Geçersiz kasa/item kodu: ${r.itemCode}`);
+        }
+        const qty = Math.min(100, Math.max(1, Math.floor(Number(r.quantity) || 1)));
+        await addItem(userId, r.itemCode, qty, txClient);
+        return { type: r.type, itemCode: r.itemCode, quantity: qty };
+    }
+    if (r.type === 'badge') {
+        // Rozet 8.27 Unvan/Rozet aşamasına kadar payload'da saklanır; envantere eklenmez.
+        return { type: 'badge', itemCode: r.itemCode };
+    }
+    throw new Error(`Bilinmeyen reward tipi: ${r.type}`);
+}
+
+// Claim kaydı + ödül uygulaması için ortak transaction gövdesi
+async function _doClaimWork(userId, seasonId, lvl, rewardEntry, txClient) {
+    // Aktif sezon kontrolü
+    const seasonCheckRes = await txClient.query(
+        "SELECT id FROM economy_seasons WHERE id = $1 AND status = 'active'",
+        [seasonId]
+    );
+    if (!seasonCheckRes.rows[0]) {
+        return { success: false, reason: 'season_not_active' };
+    }
+
+    // Kullanıcı sezon kaydı ve seviye kontrolü
+    const userRes = await txClient.query(
+        'SELECT season_level FROM economy_season_users WHERE season_id = $1 AND user_id = $2',
+        [seasonId, userId]
+    );
+    if (!userRes.rows[0]) {
+        return { success: false, reason: 'user_not_found' };
+    }
+    if (Number(userRes.rows[0].season_level) < lvl) {
+        return { success: false, reason: 'level_locked' };
+    }
+
+    // Claim kaydını yaz — UNIQUE(season_id, user_id, level) duplicate koruması
+    const insertRes = await txClient.query(`
+        INSERT INTO economy_user_season_rewards
+            (season_id, user_id, level, reward_code, reward_type, reward_payload)
+        VALUES ($1, $2, $3, $4, 'level_path', $5::jsonb)
+        ON CONFLICT (season_id, user_id, level) DO NOTHING
+        RETURNING id, claimed_at
+    `, [
+        seasonId, userId, lvl,
+        rewardEntry.code || null,
+        JSON.stringify({ rewards: rewardEntry.rewards })
+    ]);
+
+    if (!insertRes.rows[0]) {
+        return { success: false, reason: 'already_claimed' };
+    }
+
+    // Kullanıcı economy_users kaydını güvence altına al (coin/item için gerekli)
+    await ensureUser(userId, txClient);
+
+    // Ödülleri aynı transaction içinde uygula
+    const appliedRewards = [];
+    for (const r of rewardEntry.rewards) {
+        const applied = await _applyRewardEntry(userId, r, txClient);
+        appliedRewards.push(applied);
+    }
+
+    return {
+        success: true,
+        level: lvl,
+        reward: rewardEntry,
+        appliedRewards,
+        claimedAt: insertRes.rows[0].claimed_at
+    };
+}
+
+// Seviye ödülü claim — gerçek ödül + claim kaydı transaction içinde atomik
+// db = pool → kendi transaction'ını açar
+// db = txClient → mevcut transaction'ı kullanır (nested transaction yaratmaz)
+async function claimLevelReward(userId, seasonId, level, _legacyReward = null, db = pool) {
     if (!userId || !seasonId || level == null) {
         return { success: false, reason: 'invalid_params' };
     }
@@ -618,43 +704,16 @@ async function claimLevelReward(userId, seasonId, level, reward = null, db = poo
         return { success: false, reason: 'invalid_level' };
     }
 
+    const rewardEntry = getSeasonRewardByLevel(lvl);
+    if (!rewardEntry) {
+        return { success: false, reason: 'reward_not_found' };
+    }
+
     try {
-        // Kullanıcının bu seviyeye ulaşıp ulaşmadığını kontrol et
-        const userRes = await db.query(
-            'SELECT season_level FROM economy_season_users WHERE season_id = $1 AND user_id = $2',
-            [seasonId, userId]
-        );
-        if (!userRes.rows[0]) {
-            return { success: false, reason: 'user_not_found' };
+        if (db === pool) {
+            return await withTx(txClient => _doClaimWork(userId, seasonId, lvl, rewardEntry, txClient));
         }
-        const currentLevel = Number(userRes.rows[0].season_level);
-        if (currentLevel < lvl) {
-            return { success: false, reason: 'level_locked' };
-        }
-
-        const rewardCode    = reward ? (reward.code    || null) : null;
-        const rewardType    = reward ? (reward.type    || null) : null;
-        const rewardPayload = reward ? (reward.payload || {})   : {};
-
-        // ON CONFLICT DO NOTHING — UNIQUE(season_id, user_id, level) duplicate koruması
-        const insertRes = await db.query(`
-            INSERT INTO economy_user_season_rewards
-                (season_id, user_id, level, reward_code, reward_type, reward_payload)
-            VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-            ON CONFLICT (season_id, user_id, level) DO NOTHING
-            RETURNING id, claimed_at
-        `, [seasonId, userId, lvl, rewardCode, rewardType, JSON.stringify(rewardPayload)]);
-
-        if (!insertRes.rows[0]) {
-            return { success: false, reason: 'already_claimed' };
-        }
-
-        return {
-            success: true,
-            level: lvl,
-            claimedAt: insertRes.rows[0].claimed_at,
-            reward
-        };
+        return await _doClaimWork(userId, seasonId, lvl, rewardEntry, db);
     } catch (err) {
         console.error('Seviye ödülü claim hatası:', err && err.message ? err.message : err);
         return { success: false, reason: 'error' };
