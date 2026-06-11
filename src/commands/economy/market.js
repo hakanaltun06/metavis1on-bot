@@ -11,6 +11,7 @@ const {
 } = require('../../services/economyService');
 const { getCrateTypes, calculateCrateDynamicPrice } = require('../../services/crateService');
 const { disableAllComponents } = require('../../utils/componentUtils');
+const { isSystemEnabled } = require('../../services/settingsService');
 
 // Vitrin için kısa ve vurucu açıklamalar
 const ITEM_SHORT_DESCS = {
@@ -134,6 +135,13 @@ const COLLECTOR_TIMEOUT = 5 * 60 * 1000;
 module.exports = {
     data: { name: 'market', description: 'Market eşyalarını ve güncel fiyatları gösterir.' },
     async execute(interaction) {
+        const marketEnabled = await isSystemEnabled('system.market_enabled').catch(() => true);
+        if (!marketEnabled) {
+            return interaction.reply({
+                embeds: [createEmbed('warn', '🛒 Market', 'Market sistemi kısa süreliğine kapalı. Biraz sonra tekrar deneyebilirsin.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
         try {
             const supply = await getMoneySupply();
             const index  = calculateInflationIndex(supply.total);

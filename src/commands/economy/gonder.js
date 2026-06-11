@@ -5,6 +5,7 @@ const { addToWalletPlain, removeFromWalletPlain } = require('../../database/mone
 const { logTransaction } = require('../../database/transactions');
 const { createEmbed } = require('../../utils/embeds');
 const { fmtMoney } = require('../../utils/format');
+const { isSystemEnabled } = require('../../services/settingsService');
 
 module.exports = {
     data: {
@@ -16,6 +17,13 @@ module.exports = {
         ]
     },
     async execute(interaction) {
+        const transferEnabled = await isSystemEnabled('system.transfer_enabled').catch(() => true);
+        if (!transferEnabled) {
+            return interaction.reply({
+                embeds: [createEmbed('warn', '💸 Para Transferi', 'Para transferi kısa süreliğine kapalı. Biraz sonra tekrar deneyebilirsin.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
         const target = interaction.options.getUser('kullanici');
         const amount = interaction.options.getInteger('miktar');
 

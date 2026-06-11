@@ -3,6 +3,7 @@ const { createEmbed } = require('../../utils/embeds');
 const { formatFull } = require('../../utils/format');
 const { getUserAchievements, claimAchievementReward } = require('../../services/progressionService');
 const { disableAllComponents } = require('../../utils/componentUtils');
+const { isSystemEnabled } = require('../../services/settingsService');
 
 const COLLECTOR_TIMEOUT = 5 * 60 * 1000;
 
@@ -125,6 +126,13 @@ module.exports = {
     },
 
     async execute(interaction) {
+        const achievementsEnabled = await isSystemEnabled('system.achievements_enabled').catch(() => true);
+        if (!achievementsEnabled) {
+            return interaction.reply({
+                embeds: [createEmbed('warn', '🏅 Başarımlar', 'Başarım sistemi kısa süreliğine kapalı. Biraz sonra tekrar deneyebilirsin.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
         const shouldClaim = interaction.options.getBoolean('odulleri_al') || false;
         const userId      = interaction.user.id;
 

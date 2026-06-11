@@ -16,6 +16,7 @@ const {
 const { findItemById } = require('../../services/shopService');
 const { grantCappedPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
+const { isSystemEnabled } = require('../../services/settingsService');
 
 function getSellSeasonPoints(rarity) {
     const key = String(rarity || '').toLowerCase();
@@ -68,6 +69,13 @@ module.exports = {
     },
 
     async execute(interaction) {
+        const marketEnabled = await isSystemEnabled('system.market_enabled').catch(() => true);
+        if (!marketEnabled) {
+            return interaction.reply({
+                embeds: [createEmbed('warn', '🛒 Market', 'Market sistemi kısa süreliğine kapalı. Biraz sonra tekrar deneyebilirsin.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
         const itemCode = interaction.options.getString('esya').toLowerCase();
         const qty = interaction.options.getInteger('adet') || 1;
 

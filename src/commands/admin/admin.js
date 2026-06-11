@@ -109,6 +109,30 @@ function fmtKumarValue(ayarChoice, storedValue) {
     return formatNumber(storedValue);
 }
 
+const SISTEM_CHOICES = [
+    { name: 'Kumar (Slot / Yazı-Tura)',     value: 'gambling'      },
+    { name: 'Market (Satın Al / Sat)',       value: 'market'        },
+    { name: 'Kasa Açma',                    value: 'crate_opening' },
+    { name: 'Kredi Alma',                   value: 'loan'          },
+    { name: 'Faiz',                         value: 'interest'      },
+    { name: 'Para Transferi',               value: 'transfer'      },
+    { name: 'Sezon Puanı Kazanımı',         value: 'season_points' },
+    { name: 'Görevler (İlerleme / Ödül)',   value: 'tasks'         },
+    { name: 'Başarımlar (İlerleme / Ödül)', value: 'achievements'  },
+];
+
+const SISTEM_MAP = {
+    gambling:      { key: 'system.gambling_enabled',      label: 'Kumar',          commands: '/kumar · /yazitura · /slot',                    riskLevel: 'high'   },
+    market:        { key: 'system.market_enabled',         label: 'Market',         commands: '/market · /satinal · /sat',                    riskLevel: 'high'   },
+    crate_opening: { key: 'system.crate_opening_enabled',  label: 'Kasa Açma',      commands: '/kasa-ac',                                     riskLevel: 'high'   },
+    loan:          { key: 'system.loan_enabled',           label: 'Kredi Alma',     commands: '/kredi al (görüntüleme ve ödeme açık kalır)',   riskLevel: 'high'   },
+    interest:      { key: 'system.interest_enabled',       label: 'Faiz',           commands: '/faiz',                                        riskLevel: 'normal' },
+    transfer:      { key: 'system.transfer_enabled',       label: 'Para Transferi', commands: '/gonder',                                      riskLevel: 'high'   },
+    season_points: { key: 'system.season_points_enabled',  label: 'Sezon Puanı',    commands: 'Puan kazanımı (görüntüleme açık kalır)',        riskLevel: 'normal' },
+    tasks:         { key: 'system.tasks_enabled',          label: 'Görevler',       commands: '/gorevler ilerleme ve ödül alma',               riskLevel: 'normal' },
+    achievements:  { key: 'system.achievements_enabled',   label: 'Başarımlar',     commands: '/basarimlar ilerleme ve ödül alma',             riskLevel: 'normal' },
+};
+
 function fmtMs(ms) {
     if (ms <= 0) return '🟢 Hazır';
     const totalSec = Math.ceil(ms / 1000);
@@ -553,6 +577,52 @@ module.exports = {
                         ]
                     }
                 ]
+            },
+            {
+                name: 'sistem',
+                description: 'Bot sistemlerini açma, kapatma ve yönetim.',
+                type: 2,
+                options: [
+                    {
+                        name: 'durum',
+                        description: 'Tüm sistem açık/kapalı durumunu gösterir.',
+                        type: 1,
+                        options: []
+                    },
+                    {
+                        name: 'ayarlar',
+                        description: 'Sistem kategorisi bot_settings kayıtlarını görüntüler.',
+                        type: 1,
+                        options: []
+                    },
+                    {
+                        name: 'ac',
+                        description: 'Seçilen sistemi açar.',
+                        type: 1,
+                        options: [
+                            { name: 'sistem', type: 3, description: 'Açılacak sistem.', required: true, choices: SISTEM_CHOICES },
+                            { name: 'sebep',  type: 3, description: 'İşlem sebebi.',    required: true }
+                        ]
+                    },
+                    {
+                        name: 'kapat',
+                        description: 'Seçilen sistemi geçici olarak kapatır.',
+                        type: 1,
+                        options: [
+                            { name: 'sistem', type: 3, description: 'Kapatılacak sistem.', required: true, choices: SISTEM_CHOICES },
+                            { name: 'sebep',  type: 3, description: 'İşlem sebebi.',       required: true }
+                        ]
+                    },
+                    {
+                        name: 'varsayilana-dondur',
+                        description: 'Seçilen sistem ayarını varsayılan değerine döndürür.',
+                        type: 1,
+                        options: [
+                            { name: 'sistem', type: 3, description: 'Varsayılana döndürülecek sistem.', required: true, choices: SISTEM_CHOICES },
+                            { name: 'sebep',  type: 3, description: 'İşlem sebebi.',                   required: true }
+                        ]
+                    }
+                ]
             }
         ]
     },
@@ -620,6 +690,13 @@ module.exports = {
                 if (sub === 'envanter')     return await handleEkonomiEnvanter(interaction);
                 if (sub === 'admin-etkisi') return await handleEkonomiAdminEtkisi(interaction);
                 if (sub === 'supheli')      return await handleEkonomiSupheli(interaction);
+            }
+            if (group === 'sistem') {
+                if (sub === 'durum')              return await handleSistemDurum(interaction);
+                if (sub === 'ayarlar')            return await handleSistemAyarlar(interaction);
+                if (sub === 'ac')                 return await handleSistemAc(interaction);
+                if (sub === 'kapat')              return await handleSistemKapat(interaction);
+                if (sub === 'varsayilana-dondur') return await handleSistemVarsayilanaDondur(interaction);
             }
         } catch (err) {
             console.error(`/admin ${group} ${sub} hatası:`, err?.message ?? err);
@@ -1684,7 +1761,10 @@ async function handleKumarVarsayilanaDondur(interaction) {
 // ==================[ EKONOMİ DENETİM RAPORLARI ]==================
 
 async function handleEkonomiRapor(interaction) {
-    const ov = await getEconomyOverview();
+    const [ov, gamblingEnabled] = await Promise.all([
+        getEconomyOverview(),
+        getBooleanSetting('system.gambling_enabled', true)
+    ]);
 
     const topLine = ov.top3.length > 0
         ? ov.top3.map((r, i) => `${i + 1}. <@${r.userId}> — ${formatNumber(r.totalWealth)} 🪙`).join('\n')
@@ -1713,8 +1793,9 @@ async function handleEkonomiRapor(interaction) {
         { name: '📦 Kasalar (envanter)', value: `${formatNumber(ov.crateTotal)} adet`,        inline: true },
         { name: '✨ Koleksiyon (adet)',   value: `${formatNumber(ov.colTotal)} / ~${formatNumber(ov.colValue)} 🪙`, inline: true },
 
-        { name: '🏆 Aktif Sezon',        value: seasonLine.slice(0, 1024),                   inline: false },
-        { name: '👑 En Zengin 3',        value: topLine.slice(0, 1024) || 'Veri yok.',        inline: false }
+        { name: '🏆 Aktif Sezon',        value: seasonLine.slice(0, 1024),                             inline: false },
+        { name: '👑 En Zengin 3',        value: topLine.slice(0, 1024) || 'Veri yok.',                inline: false },
+        { name: '🎰 Kumar Sistemi',       value: gamblingEnabled ? '🟢 Açık' : '🔴 Kapalı',            inline: true  }
     ).setFooter({ text: 'Ekonomi raporu — read-only' });
 
     return interaction.editReply({ embeds: [embed] });
@@ -1931,11 +2012,183 @@ async function handleEkonomiSupheli(interaction) {
         embed.addFields({ name: label, value: lines || 'Veri yok.', inline: false });
     }
 
-    embed.addFields({
-        name: '⚠️ Önemli Not',
-        value: 'Bu rapor otomatik ceza vermez. Şüpheli durumları kendin inceleyerek karar ver.',
-        inline: false
-    }).setFooter({ text: `Şüpheli sinyal raporu — son ${data.hours} saat — read-only` });
+    embed.addFields(
+        {
+            name: 'ℹ️ Sinyal Türleri Hakkında',
+            value: 'Servet, banka kapasitesi, kasa ve prestij sinyalleri anlık durumdur; süre filtresi yalnızca admin hareketleri gibi zamana bağlı sinyallere uygulanır.',
+            inline: false
+        },
+        {
+            name: '⚠️ Önemli Not',
+            value: 'Bu rapor otomatik ceza vermez. Şüpheli durumları kendin inceleyerek karar ver.',
+            inline: false
+        }
+    ).setFooter({ text: `Şüpheli sinyal raporu — son ${data.hours} saat — read-only` });
 
     return interaction.editReply({ embeds: [embed] });
+}
+
+// ==================[ /admin sistem durum ]==================
+
+async function handleSistemDurum(interaction) {
+    const [gambling, market, crateOpening, loan, interest, transfer, seasonPoints, tasks, achievements] =
+        await Promise.all([
+            getBooleanSetting('system.gambling_enabled',      true),
+            getBooleanSetting('system.market_enabled',         true),
+            getBooleanSetting('system.crate_opening_enabled',  true),
+            getBooleanSetting('system.loan_enabled',           true),
+            getBooleanSetting('system.interest_enabled',       true),
+            getBooleanSetting('system.transfer_enabled',       true),
+            getBooleanSetting('system.season_points_enabled',  true),
+            getBooleanSetting('system.tasks_enabled',          true),
+            getBooleanSetting('system.achievements_enabled',   true),
+        ]);
+    function s(v) { return v ? '🟢 Açık' : '🔴 Kapalı'; }
+    const embed = createEmbed('admin', '⚙️ Sistem Durumu',
+        'Tüm bot sistemlerinin anlık açık/kapalı durumu. Bu ekran sadece durum gösterir, işlem yapmaz.')
+        .addFields(
+            { name: '🎰 Kumar',           value: `${s(gambling)}\n/kumar · /yazitura · /slot`,           inline: true },
+            { name: '🛒 Market',          value: `${s(market)}\n/market · /satinal · /sat`,              inline: true },
+            { name: '📦 Kasa Açma',      value: `${s(crateOpening)}\n/kasa-ac`,                          inline: true },
+            { name: '💳 Kredi Alma',     value: `${s(loan)}\n/kredi al (görüntüleme ve ödeme açık)`,     inline: true },
+            { name: '🏦 Faiz',           value: `${s(interest)}\n/faiz`,                                 inline: true },
+            { name: '💸 Para Transferi', value: `${s(transfer)}\n/gonder`,                               inline: true },
+            { name: '🏆 Sezon Puanı',    value: `${s(seasonPoints)}\nPuan kazanımı (görüntüleme açık)`, inline: true },
+            { name: '📋 Görevler',       value: `${s(tasks)}\n/gorevler ilerleme ve ödül`,               inline: true },
+            { name: '🏅 Başarımlar',     value: `${s(achievements)}\n/basarimlar ilerleme ve ödül`,      inline: true },
+        )
+        .setFooter({ text: 'Açmak/kapatmak için /admin sistem ac | kapat' });
+    return interaction.editReply({ embeds: [embed] });
+}
+
+// ==================[ /admin sistem ayarlar ]==================
+
+async function handleSistemAyarlar(interaction) {
+    const rows = await listSettings('system').catch(() => []);
+    if (!rows.length) {
+        return editInfo(interaction, 'ℹ️ Sistem Ayarları', 'Henüz sistem kategorisinde kayıt yok.');
+    }
+    const lines = rows.map(r => {
+        const val = String(r.value ?? r.default_value ?? '—');
+        return `\`${r.key}\` → **${val}**` + (r.description ? `\n— ${r.description}` : '');
+    }).join('\n\n');
+    const embed = createEmbed('admin', '⚙️ Sistem Kategorisi Ayarları',
+        lines.slice(0, 4000)
+    ).setFooter({ text: `${rows.length} kayıt · bot_settings · sistem — read-only` });
+    return interaction.editReply({ embeds: [embed] });
+}
+
+// ==================[ /admin sistem ac ]==================
+
+async function handleSistemAc(interaction) {
+    const sistemChoice = interaction.options.getString('sistem');
+    const sebep        = interaction.options.getString('sebep');
+    const sistemInfo   = SISTEM_MAP[sistemChoice];
+    if (!sistemInfo) return editError(interaction, `\`${sistemChoice}\` geçerli bir sistem değil.`);
+
+    const currentEnabled = await getBooleanSetting(sistemInfo.key, true);
+    if (currentEnabled) {
+        return editInfo(interaction, `ℹ️ ${sistemInfo.label} Zaten Açık`,
+            `**${sistemInfo.label}** sistemi zaten açık durumda.`);
+    }
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       `⚠️ Sistemi Aç — ${sistemInfo.label}`,
+        description: `**${sistemInfo.label}** sistemi açılacak.\nEtkilenen: ${sistemInfo.commands}`,
+        targetKey:   sistemInfo.key,
+        oldValue:    '🔴 Kapalı',
+        newValue:    '🟢 Açık',
+        reason:      sebep,
+        riskLevel:   sistemInfo.riskLevel
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Sistem açma işlemi gerçekleştirilmedi.');
+
+    try {
+        await setSetting(sistemInfo.key, 'true', interaction.user.id, sebep);
+    } catch (err) {
+        return editError(interaction, 'Ayar kaydedilemedi. Biraz sonra tekrar dener misin?');
+    }
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', `✅ ${sistemInfo.label} Açıldı`,
+            `**${sistemInfo.label}** sistemi açıldı.\nEtkilenen: ${sistemInfo.commands}`
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+// ==================[ /admin sistem kapat ]==================
+
+async function handleSistemKapat(interaction) {
+    const sistemChoice = interaction.options.getString('sistem');
+    const sebep        = interaction.options.getString('sebep');
+    const sistemInfo   = SISTEM_MAP[sistemChoice];
+    if (!sistemInfo) return editError(interaction, `\`${sistemChoice}\` geçerli bir sistem değil.`);
+
+    const currentEnabled = await getBooleanSetting(sistemInfo.key, true);
+    if (!currentEnabled) {
+        return editInfo(interaction, `ℹ️ ${sistemInfo.label} Zaten Kapalı`,
+            `**${sistemInfo.label}** sistemi zaten kapalı durumda.`);
+    }
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       `⚠️ Sistemi Kapat — ${sistemInfo.label}`,
+        description: `**${sistemInfo.label}** sistemi geçici olarak kapatılacak.\nEtkilenen: ${sistemInfo.commands}`,
+        targetKey:   sistemInfo.key,
+        oldValue:    '🟢 Açık',
+        newValue:    '🔴 Kapalı',
+        reason:      sebep,
+        riskLevel:   'high'
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Sistem kapatma işlemi gerçekleştirilmedi.');
+
+    try {
+        await setSetting(sistemInfo.key, 'false', interaction.user.id, sebep);
+    } catch (err) {
+        return editError(interaction, 'Ayar kaydedilemedi. Biraz sonra tekrar dener misin?');
+    }
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', `🔴 ${sistemInfo.label} Kapatıldı`,
+            `**${sistemInfo.label}** sistemi kapatıldı.\nEtkilenen: ${sistemInfo.commands}`
+        ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
+    });
+}
+
+// ==================[ /admin sistem varsayilana-dondur ]==================
+
+async function handleSistemVarsayilanaDondur(interaction) {
+    const sistemChoice = interaction.options.getString('sistem');
+    const sebep        = interaction.options.getString('sebep');
+    const sistemInfo   = SISTEM_MAP[sistemChoice];
+    if (!sistemInfo) return editError(interaction, `\`${sistemChoice}\` geçerli bir sistem değil.`);
+
+    const currentEnabled = await getBooleanSetting(sistemInfo.key, true);
+    const oldValue = currentEnabled ? '🟢 Açık' : '🔴 Kapalı';
+
+    const confirmed = await awaitAdminConfirmation(interaction, {
+        title:       `⚠️ Varsayılana Döndür — ${sistemInfo.label}`,
+        description: `**${sistemInfo.label}** sistem ayarı varsayılan değerine döndürülecek.\nEtkilenen: ${sistemInfo.commands}`,
+        targetKey:   sistemInfo.key,
+        oldValue,
+        newValue:    '🟢 Açık (varsayılan: true)',
+        reason:      sebep,
+        riskLevel:   sistemInfo.riskLevel
+    });
+    if (!confirmed) return editInfo(interaction, '❌ İptal Edildi', 'Varsayılana döndürme işlemi gerçekleştirilmedi.');
+
+    try {
+        await resetSetting(sistemInfo.key, interaction.user.id, sebep);
+    } catch (err) {
+        return editError(interaction, 'Ayar sıfırlanamadı. Biraz sonra tekrar dener misin?');
+    }
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', `↩️ ${sistemInfo.label} Varsayılana Döndürüldü`,
+            `**${sistemInfo.label}** sistem ayarı varsayılan değerine döndürüldü.\nEtkilenen: ${sistemInfo.commands}`
+        ).addFields(
+            { name: '⬅️ Eski Değer', value: oldValue,              inline: true },
+            { name: '➡️ Yeni Değer', value: '🟢 Açık (varsayılan)', inline: true },
+            { name: '📝 Sebep',       value: sebep,                  inline: false }
+        )]
+    });
 }

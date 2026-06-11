@@ -9,6 +9,7 @@ const { addItem }  = require('../database/inventory');
 const { grantSeasonPoints }           = require('./seasonService');
 const { getTaskDefinitionsByType, getTaskDefinition }  = require('../config/taskDefinitions');
 const { getAllAchievementDefinitions, getAchievementDefinition } = require('../config/achievementDefinitions');
+const { isSystemEnabled } = require('./settingsService');
 
 // ==================[ PERİYOT ANAHTAR ÜRETİCİLERİ ]==================
 
@@ -31,6 +32,9 @@ function _isoWeekKey(date) {
 // ==================[ GÖREV İLERLEME ]==================
 
 async function triggerTaskProgress(userId, eventType, amount = 1, meta = {}) {
+    const tasksEnabled = await isSystemEnabled('system.tasks_enabled').catch(() => true);
+    if (!tasksEnabled) return { advanced: [], completed: [] };
+
     const safeAmount = Math.max(1, Math.floor(Number(amount) || 1));
 
     const matchingDefs = [
@@ -131,6 +135,9 @@ async function getWeeklyTasks(userId) { return getUserTasks(userId, 'weekly'); }
 // ==================[ GÖREV ÖDÜL ALMA ]==================
 
 async function claimTaskReward(userId, taskCode, periodKey) {
+    const tasksEnabled = await isSystemEnabled('system.tasks_enabled').catch(() => true);
+    if (!tasksEnabled) return { ok: false, reason: 'system_disabled' };
+
     const def = getTaskDefinition(taskCode);
     if (!def) return { ok: false, reason: 'task_not_found' };
 
@@ -179,6 +186,9 @@ async function claimTaskReward(userId, taskCode, periodKey) {
 // ==================[ BAŞARIM İLERLEME ]==================
 
 async function triggerAchievementProgress(userId, eventType, amount = 1, meta = {}) {
+    const achievementsEnabled = await isSystemEnabled('system.achievements_enabled').catch(() => true);
+    if (!achievementsEnabled) return { advanced: [], unlocked: [] };
+
     const safeAmount = Math.max(1, Math.floor(Number(amount) || 1));
 
     const matchingDefs = getAllAchievementDefinitions().filter(d => d.eventType === eventType);
@@ -267,6 +277,9 @@ async function getUserAchievements(userId) {
 // ==================[ BAŞARIM ÖDÜL ALMA ]==================
 
 async function claimAchievementReward(userId, achievementCode) {
+    const achievementsEnabled = await isSystemEnabled('system.achievements_enabled').catch(() => true);
+    if (!achievementsEnabled) return { ok: false, reason: 'system_disabled' };
+
     const def = getAchievementDefinition(achievementCode);
     if (!def) return { ok: false, reason: 'achievement_not_found' };
 

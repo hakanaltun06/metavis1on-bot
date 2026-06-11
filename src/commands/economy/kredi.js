@@ -33,6 +33,7 @@ const {
 const { refreshUserLoans } = require('../../services/loanRefresh');
 const { grantCappedPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
+const { isSystemEnabled } = require('../../services/settingsService');
 
 // ================== [ KOMUT TANIMI ] ==================
 module.exports = {
@@ -165,6 +166,13 @@ async function handleBilgi(interaction) {
 
 // ================== [ /kredi al ] ==================
 async function handleAl(interaction) {
+    const loanEnabled = await isSystemEnabled('system.loan_enabled').catch(() => true);
+    if (!loanEnabled) {
+        return interaction.reply({
+            embeds: [createEmbed('warn', '💳 Kredi Alma', 'Kredi alma sistemi kısa süreliğine kapalı. Mevcut kredi bilgilerini görüntüleyebilir veya ödeme yapabilirsin.')],
+            flags: MessageFlags.Ephemeral
+        });
+    }
     const amount = interaction.options.getInteger('miktar');
     const vadeStr = interaction.options.getString('vade');
     const term = getTermOption(vadeStr);

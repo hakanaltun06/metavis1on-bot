@@ -11,11 +11,18 @@ const {
     INTEREST_INTERVAL_MS,
     estimateInterest
 } = require('../../services/bankService');
-const { getNumberSetting } = require('../../services/settingsService');
+const { getNumberSetting, isSystemEnabled } = require('../../services/settingsService');
 
 module.exports = {
     data: { name: 'faiz', description: 'Bankandaki paran üzerinden faiz alırsın.' },
     async execute(interaction) {
+        const interestEnabled = await isSystemEnabled('system.interest_enabled').catch(() => true);
+        if (!interestEnabled) {
+            return interaction.reply({
+                embeds: [createEmbed('warn', '🏦 Faiz', 'Faiz sistemi kısa süreliğine kapalı. Biraz sonra tekrar deneyebilirsin.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
         try {
             const effectiveCooldown = await getNumberSetting('cooldown.interest', INTEREST_INTERVAL_MS);
             const result = await withTx(async (db) => {

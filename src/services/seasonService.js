@@ -1,6 +1,7 @@
 const { pool } = require('../database/pool');
 const { withTx } = require('../database/tx');
 const { addItem } = require('../database/inventory');
+const { isSystemEnabled } = require('./settingsService');
 
 // ================== [ SEZON SEVİYE EŞİKLERİ ] ==================
 const SEASON_LEVELS = [
@@ -84,6 +85,9 @@ async function getUserSeasonData(userId, db = pool) {
 // ================== [ SEZON PUANI EKLE ] ==================
 async function grantSeasonPoints(userId, points, db = pool) {
     try {
+        const enabled = await isSystemEnabled('system.season_points_enabled').catch(() => true);
+        if (!enabled) return { granted: 0, reason: 'system_disabled' };
+
         const p = Math.floor(Number(points) || 0);
         if (p <= 0) return { granted: 0, reason: 'invalid_points' };
 
@@ -128,6 +132,9 @@ async function grantSeasonPoints(userId, points, db = pool) {
 // category: 'gambling' | 'beg' | 'crate' | 'sell' | 'loan'
 async function grantCappedPoints(userId, category, points, dailyLimit, db = pool) {
     try {
+        const enabled = await isSystemEnabled('system.season_points_enabled').catch(() => true);
+        if (!enabled) return { granted: 0, reason: 'system_disabled' };
+
         const p = Math.floor(Number(points) || 0);
         const limit = Math.floor(Number(dailyLimit) || 0);
         if (p <= 0 || limit <= 0) return { granted: 0, reason: 'invalid_params' };

@@ -25,6 +25,7 @@ async function safeQuery(sql, params = []) {
 }
 
 function safeNum(val, fallback = 0) {
+    if (val === null || val === undefined) return fallback;
     const n = Number(val);
     return Number.isFinite(n) ? n : fallback;
 }

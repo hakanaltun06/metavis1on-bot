@@ -15,6 +15,7 @@ const {
 } = require('../../services/crateService');
 const { grantCappedPoints } = require('../../services/seasonService');
 const { trigger } = require('../../services/progressionService');
+const { isSystemEnabled } = require('../../services/settingsService');
 
 const CRATE_SEASON_POINTS = {
     basit_kasa:    5,
@@ -68,6 +69,13 @@ module.exports = {
         }
     },
     async execute(interaction) {
+        const crateOpeningEnabled = await isSystemEnabled('system.crate_opening_enabled').catch(() => true);
+        if (!crateOpeningEnabled) {
+            return interaction.reply({
+                embeds: [createEmbed('warn', '📦 Kasa Açma', 'Kasa açma sistemi kısa süreliğine kapalı. Biraz sonra tekrar deneyebilirsin.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
         const crateCode = interaction.options.getString('kasa');
         const qty = interaction.options.getInteger('adet') || 1;
 

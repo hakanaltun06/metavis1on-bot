@@ -13,6 +13,7 @@ const {
 } = require('../../services/economyService');
 const { getCrateByCode, getCrateTypes, calculateCrateDynamicPrice } = require('../../services/crateService');
 const { trigger } = require('../../services/progressionService');
+const { isSystemEnabled } = require('../../services/settingsService');
 
 module.exports = {
     data: {
@@ -52,6 +53,13 @@ module.exports = {
     },
 
     async execute(interaction) {
+        const marketEnabled = await isSystemEnabled('system.market_enabled').catch(() => true);
+        if (!marketEnabled) {
+            return interaction.reply({
+                embeds: [createEmbed('warn', '🛒 Market', 'Market sistemi kısa süreliğine kapalı. Biraz sonra tekrar deneyebilirsin.')],
+                flags: MessageFlags.Ephemeral
+            });
+        }
         const itemId = interaction.options.getString('esya').toLowerCase();
         const qty = interaction.options.getInteger('adet') || 1;
 
