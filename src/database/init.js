@@ -193,6 +193,61 @@ async function initDB() {
                 ON admin_logs(category);
             CREATE INDEX IF NOT EXISTS idx_admin_logs_created
                 ON admin_logs(created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS economy_user_season_rewards (
+                id             SERIAL PRIMARY KEY,
+                season_id      INTEGER NOT NULL REFERENCES economy_seasons(id) ON DELETE CASCADE,
+                user_id        VARCHAR(25) NOT NULL,
+                level          INTEGER NOT NULL,
+                reward_code    VARCHAR(100),
+                reward_type    VARCHAR(50),
+                reward_payload JSONB DEFAULT '{}'::jsonb,
+                claimed_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(season_id, user_id, level)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_season_rewards_season_user
+                ON economy_user_season_rewards(season_id, user_id);
+            CREATE INDEX IF NOT EXISTS idx_season_rewards_season_level
+                ON economy_user_season_rewards(season_id, level);
+            CREATE INDEX IF NOT EXISTS idx_season_rewards_user
+                ON economy_user_season_rewards(user_id);
+
+            CREATE TABLE IF NOT EXISTS economy_season_snapshots (
+                id            SERIAL PRIMARY KEY,
+                season_id     INTEGER NOT NULL REFERENCES economy_seasons(id) ON DELETE CASCADE,
+                snapshot_type VARCHAR(30) NOT NULL,
+                data          JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_season_snapshots_season_type
+                ON economy_season_snapshots(season_id, snapshot_type);
+            CREATE INDEX IF NOT EXISTS idx_season_snapshots_created
+                ON economy_season_snapshots(created_at);
+
+            CREATE TABLE IF NOT EXISTS economy_season_automation_state (
+                id                   SERIAL PRIMARY KEY,
+                season_id            INTEGER REFERENCES economy_seasons(id) ON DELETE CASCADE,
+                notified_7d          BOOLEAN DEFAULT false,
+                notified_3d          BOOLEAN DEFAULT false,
+                notified_24h         BOOLEAN DEFAULT false,
+                notified_1h          BOOLEAN DEFAULT false,
+                notified_end         BOOLEAN DEFAULT false,
+                last_check           TIMESTAMP,
+                last_daily_report_at TIMESTAMP,
+                auto_ended_at        TIMESTAMP,
+                created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(season_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_season_automation_season
+                ON economy_season_automation_state(season_id);
+            CREATE INDEX IF NOT EXISTS idx_season_automation_ended
+                ON economy_season_automation_state(auto_ended_at);
+            CREATE INDEX IF NOT EXISTS idx_season_automation_report
+                ON economy_season_automation_state(last_daily_report_at);
         `);
         console.log('✅ Veritabanı tabloları hazır.');
     } finally {
