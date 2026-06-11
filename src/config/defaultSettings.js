@@ -215,13 +215,11 @@ const DEFAULT_SETTINGS = [
     },
     {
         key: 'gamble.max_bet',
-        // Mevcut kodda sabit tanımlı değil; güvenli varsayılan 1.000.000.
-        // 8.17 Admin Kumar Yönetimi aşamasında gamblingService bunu okuyabilir.
         value: '1000000',
         valueType: 'integer',
         category: 'gambling',
-        description: '/kumar maksimum bahis miktarı. (Mevcut kodda sabit yok; 8.17 bağlanacak.)',
-        minValue: 1, maxValue: 100000000,
+        description: '/kumar için izin verilen maksimum bahis miktarı.',
+        minValue: 100, maxValue: 100000000,
         defaultValue: '1000000',
         isSensitive: false
     },

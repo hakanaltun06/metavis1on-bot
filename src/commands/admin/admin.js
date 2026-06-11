@@ -36,6 +36,15 @@ const { getLoanRiskText } = require('../../services/loanService');
 const {
     getNumberSetting, getBooleanSetting, listSettings, setSetting, resetSetting
 } = require('../../services/settingsService');
+const {
+    getEconomyOverview,
+    getMoneyFlowReport,
+    getRichestUsers,
+    getCreditRiskReport,
+    getInventoryEconomyReport,
+    getAdminImpactReport,
+    getSuspiciousEconomyReport,
+} = require('../../services/adminEconomyReportService');
 
 // ==================[ YARDIMCI ]==================
 
@@ -487,6 +496,63 @@ module.exports = {
                         ]
                     }
                 ]
+            },
+            {
+                name: 'ekonomi',
+                description: 'Ekonomi denetim raporları (read-only).',
+                type: 2,
+                options: [
+                    {
+                        name: 'rapor',
+                        description: 'Genel ekonomi sağlık raporu.',
+                        type: 1,
+                        options: []
+                    },
+                    {
+                        name: 'para-akisi',
+                        description: 'Son X saatteki para akışı raporu.',
+                        type: 1,
+                        options: [
+                            { name: 'sure', type: 4, description: 'Kaç saatlik veri? (1–168, varsayılan: 24)', required: false, min_value: 1, max_value: 168 }
+                        ]
+                    },
+                    {
+                        name: 'zenginler',
+                        description: 'En zengin kullanıcılar listesi.',
+                        type: 1,
+                        options: [
+                            { name: 'limit', type: 4, description: 'Gösterilecek kullanıcı sayısı (1–25, varsayılan: 10)', required: false, min_value: 1, max_value: 25 }
+                        ]
+                    },
+                    {
+                        name: 'krediler',
+                        description: 'Kredi ve borç risk raporu.',
+                        type: 1,
+                        options: []
+                    },
+                    {
+                        name: 'envanter',
+                        description: 'Envanter, kasa ve koleksiyon ekonomi raporu.',
+                        type: 1,
+                        options: []
+                    },
+                    {
+                        name: 'admin-etkisi',
+                        description: 'Son X saatte admin müdahalelerinin ekonomiye etkisi.',
+                        type: 1,
+                        options: [
+                            { name: 'sure', type: 4, description: 'Kaç saatlik veri? (1–168, varsayılan: 24)', required: false, min_value: 1, max_value: 168 }
+                        ]
+                    },
+                    {
+                        name: 'supheli',
+                        description: 'Şüpheli ekonomi sinyalleri raporu.',
+                        type: 1,
+                        options: [
+                            { name: 'sure', type: 4, description: 'Kaç saatlik veri? (1–168, varsayılan: 24)', required: false, min_value: 1, max_value: 168 }
+                        ]
+                    }
+                ]
             }
         ]
     },
@@ -545,6 +611,15 @@ module.exports = {
                 if (sub === 'ac')                 return await handleKumarAc(interaction);
                 if (sub === 'kapat')              return await handleKumarKapat(interaction);
                 if (sub === 'varsayilana-dondur') return await handleKumarVarsayilanaDondur(interaction);
+            }
+            if (group === 'ekonomi') {
+                if (sub === 'rapor')        return await handleEkonomiRapor(interaction);
+                if (sub === 'para-akisi')   return await handleEkonomiParaAkisi(interaction);
+                if (sub === 'zenginler')    return await handleEkonomiZenginler(interaction);
+                if (sub === 'krediler')     return await handleEkonomiKrediler(interaction);
+                if (sub === 'envanter')     return await handleEkonomiEnvanter(interaction);
+                if (sub === 'admin-etkisi') return await handleEkonomiAdminEtkisi(interaction);
+                if (sub === 'supheli')      return await handleEkonomiSupheli(interaction);
             }
         } catch (err) {
             console.error(`/admin ${group} ${sub} hatası:`, err?.message ?? err);
@@ -1415,10 +1490,18 @@ async function handleKumarDurum(interaction) {
 }
 
 async function handleKumarAyarGoster(interaction) {
-    const rows = await listSettings('gambling').catch(() => []);
+    const [rows, gamblingEnabled] = await Promise.all([
+        listSettings('gambling').catch(() => []),
+        getBooleanSetting('system.gambling_enabled', true)
+    ]);
+
+    const statusText = gamblingEnabled ? '🟢 Açık' : '🔴 Kapalı';
 
     if (rows.length === 0) {
-        return editInfo(interaction, '⚙️ Kumar Ayarları', 'Henüz ayar kaydedilmemiş. Varsayılan değerler kullanılıyor.');
+        const embed = createEmbed('admin', '⚙️ Kumar Ayarları',
+            'Henüz ayar kaydedilmemiş. Varsayılan değerler kullanılıyor.'
+        ).addFields({ name: '🎰 Risk Oyunları', value: statusText, inline: true });
+        return interaction.editReply({ embeds: [embed] });
     }
 
     const lines = rows.map(r => {
@@ -1433,9 +1516,11 @@ async function handleKumarAyarGoster(interaction) {
 
     const embed = createEmbed('admin', '⚙️ Kumar Ayarları',
         'Tüm gambling kategorisi ayarları. Değiştirmek için `/admin kumar ayar-ayarla` kullan.'
-    ).addFields({ name: '📋 Ayarlar', value: lines.join('\n').slice(0, 1024), inline: false })
-     .addFields({ name: 'ℹ️ Not', value: 'Cooldown ayarı `/admin bekleme global-ayarla komut:kumar` üzerinden yönetilir.', inline: false })
-     .setFooter({ text: 'Kumar ayar görüntüleme — read-only' });
+    ).addFields(
+        { name: '🎰 Risk Oyunları',  value: statusText,                             inline: true },
+        { name: '📋 Ayarlar',        value: lines.join('\n').slice(0, 1024),         inline: false },
+        { name: 'ℹ️ Not',           value: 'Cooldown ayarı `/admin bekleme global-ayarla komut:kumar` üzerinden yönetilir.', inline: false }
+    ).setFooter({ text: 'Kumar ayar görüntüleme — read-only' });
 
     return interaction.editReply({ embeds: [embed] });
 }
@@ -1594,4 +1679,263 @@ async function handleKumarVarsayilanaDondur(interaction) {
             `\`${ayarInfo.key}\`\n${displayOld} → **${displayDef}**`
         ).addFields({ name: '📝 Sebep', value: sebep, inline: false })]
     });
+}
+
+// ==================[ EKONOMİ DENETİM RAPORLARI ]==================
+
+async function handleEkonomiRapor(interaction) {
+    const ov = await getEconomyOverview();
+
+    const topLine = ov.top3.length > 0
+        ? ov.top3.map((r, i) => `${i + 1}. <@${r.userId}> — ${formatNumber(r.totalWealth)} 🪙`).join('\n')
+        : 'Veri yok.';
+
+    const seasonLine = ov.seasonName
+        ? `${ov.seasonName} · ${formatNumber(ov.seasonPoints)} puan · ${ov.seasonParticipants} katılımcı`
+        : 'Aktif sezon yok.';
+
+    const embed = createEmbed('economy', '📊 Genel Ekonomi Raporu',
+        `Sunucunun anlık ekonomik sağlık durumu.`
+    ).addFields(
+        { name: '👥 Kayıtlı Kullanıcı', value: String(ov.userCount),                        inline: true },
+        { name: '💰 Toplam Cüzdan',      value: `${formatNumber(ov.totalWallet)} 🪙`,        inline: true },
+        { name: '🏦 Toplam Banka',       value: `${formatNumber(ov.totalBank)} 🪙`,           inline: true },
+
+        { name: '💎 Toplam Servet',      value: `${formatNumber(ov.totalWealth)} 🪙`,         inline: true },
+        { name: '📈 Ortalama Servet',    value: `${formatNumber(ov.avgWealth)} 🪙`,           inline: true },
+        { name: '📉 Medyan Servet',      value: `${formatNumber(ov.medianWealth)} 🪙`,        inline: true },
+
+        { name: '📋 Ort. Kredi Puanı',  value: String(ov.avgCreditScore),                   inline: true },
+        { name: '📝 Aktif Krediler',     value: `${ov.activeLoanCount} adet`,                 inline: true },
+        { name: '⚠️ Gecikmiş Krediler', value: `${ov.overdueCount} adet`,                    inline: true },
+
+        { name: '💸 Toplam Aktif Borç',  value: `${formatNumber(ov.totalActiveDebt)} 🪙`,    inline: true },
+        { name: '📦 Kasalar (envanter)', value: `${formatNumber(ov.crateTotal)} adet`,        inline: true },
+        { name: '✨ Koleksiyon (adet)',   value: `${formatNumber(ov.colTotal)} / ~${formatNumber(ov.colValue)} 🪙`, inline: true },
+
+        { name: '🏆 Aktif Sezon',        value: seasonLine.slice(0, 1024),                   inline: false },
+        { name: '👑 En Zengin 3',        value: topLine.slice(0, 1024) || 'Veri yok.',        inline: false }
+    ).setFooter({ text: 'Ekonomi raporu — read-only' });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleEkonomiParaAkisi(interaction) {
+    const sure = interaction.options.getInteger('sure') ?? 24;
+    const data = await getMoneyFlowReport(sure);
+
+    if (!data.hasData) {
+        const embed = createEmbed('economy', `💸 Para Akışı — Son ${data.hours} Saat`,
+            'Bu dönem için `economy_transactions` tablosunda kayıt bulunamadı.\n' +
+            'Not: `money.js` işlemleri bu tabloya kaydetmez; yalnızca `adminService` kayıt bırakır.'
+        );
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    const typeLines = data.types
+        .map(t => `**${t.type}**: ${formatNumber(t.totalAmount)} 🪙 (${t.count}x)`)
+        .join('\n')
+        .slice(0, 1024) || 'Veri yok.';
+
+    const embed = createEmbed('economy', `💸 Para Akışı — Son ${data.hours} Saat`,
+        `Toplam işlem hacmi: **${formatNumber(data.totalTxAmount)} 🪙**`
+    ).addFields(
+        { name: '📋 İşlem Tipleri (en yüksek)',  value: typeLines,                                inline: false },
+        { name: '➕ Admin Para Ekleme',           value: `${formatNumber(data.adminAdded)} 🪙`,   inline: true  },
+        { name: '➖ Admin Para Silme',            value: `${formatNumber(data.adminRemoved)} 🪙`, inline: true  },
+        { name: '📦 Kasa Coin Çıkışı',            value: `${formatNumber(data.crateCoinsOut)} 🪙`, inline: true }
+    ).addFields({
+        name: 'ℹ️ Not',
+        value: 'İşlem tablosundaki `amount` değerleri her zaman pozitif; yön `type` alanından anlaşılır.',
+        inline: false
+    }).setFooter({ text: `Para akışı raporu — son ${data.hours} saat — read-only` });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleEkonomiZenginler(interaction) {
+    const limit = interaction.options.getInteger('limit') ?? 10;
+    const users = await getRichestUsers(limit);
+
+    if (users.length === 0) {
+        return editInfo(interaction, '👑 En Zenginler', 'Henüz kayıtlı kullanıcı yok.');
+    }
+
+    const lines = users.map((u, i) => {
+        const flags = [
+            u.hasOverdue   ? '⚠️' : '',
+            u.isHighWealth ? '🔴' : '',
+        ].filter(Boolean).join('');
+        return `**${i + 1}.** <@${u.userId}> — ${formatNumber(u.totalWealth)} 🪙` +
+               ` (C: ${formatNumber(u.wallet)} / B: ${formatNumber(u.bank)})` +
+               ` Kredi: ${u.creditScore} ${flags}`;
+    }).join('\n').slice(0, 1024);
+
+    const embed = createEmbed('economy', `👑 En Zengin ${users.length} Kullanıcı`, lines)
+        .addFields({
+            name: 'Göstergeler',
+            value: '⚠️ Gecikmiş kredi · 🔴 Servet 50M+ (yüksek)',
+            inline: false
+        })
+        .setFooter({ text: `En zenginler raporu — read-only` });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleEkonomiKrediler(interaction) {
+    const data = await getCreditRiskReport();
+
+    const debtorLines = data.topDebtors.length > 0
+        ? data.topDebtors.map(d =>
+              `<@${d.userId}> — ${formatNumber(d.totalRemaining)} 🪙 (${d.loanCount} kredi, ${d.overdueCount}x gecikmiş)`
+          ).join('\n')
+        : 'Aktif borçlu yok.';
+
+    const embed = createEmbed('credit', '📋 Kredi & Borç Risk Raporu',
+        `Genel risk durumu: **${data.riskLabel}**`
+    ).addFields(
+        { name: '📝 Aktif Kredi Sayısı', value: String(data.activeCount),                    inline: true },
+        { name: '⚠️ Gecikmiş Kredi',    value: String(data.overdueCount),                   inline: true },
+        { name: '💸 Toplam Aktif Borç', value: `${formatNumber(data.totalDebt)} 🪙`,         inline: true },
+
+        { name: '📊 Ort. Borç Miktarı', value: `${formatNumber(data.avgDebt)} 🪙`,           inline: true },
+        { name: '📈 Ort. Kredi Puanı',  value: String(data.avgCreditScore),                  inline: true },
+        { name: '🔴 Çok Riskli (<350)', value: `${data.veryRiskyCount} kullanıcı`,           inline: true },
+
+        { name: '🏆 En Yüksek Borçlular', value: debtorLines.slice(0, 1024),                inline: false }
+    ).setFooter({ text: 'Kredi risk raporu — read-only' });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleEkonomiEnvanter(interaction) {
+    const data = await getInventoryEconomyReport();
+
+    const topItemLines = data.topItems.length > 0
+        ? data.topItems.map(i =>
+              `**${i.displayName}** (${i.category}): ${formatNumber(i.totalQty)} adet / ${i.userCount} kullanıcı`
+          ).join('\n')
+        : 'Veri yok.';
+
+    const rarestLines = data.rarest.length > 0
+        ? data.rarest.map(i =>
+              `**${i.displayName}**: ${i.totalQty} adet (${i.userCount} kullanıcı)`
+          ).join('\n')
+        : 'Veri yok.';
+
+    const topCrateLines = data.topCrateUsers.length > 0
+        ? data.topCrateUsers.map((u, i) =>
+              `${i + 1}. <@${u.userId}> — ${u.crateTotal} kasa`
+          ).join('\n')
+        : 'Veri yok.';
+
+    const prestigeLine = Object.entries(data.prestigeCounts)
+        .map(([id, cnt]) => {
+            const names = { vip_badge: 'VIP Rozeti', profil_cercevesi: 'Profil Çerçevesi', kara_kart: 'Kara Kart' };
+            return `**${names[id] || id}**: ${cnt} kullanıcı`;
+        }).join(' · ') || 'Veri yok.';
+
+    const embed = createEmbed('crate', '📦 Envanter Ekonomi Raporu',
+        `Toplam **${data.totalRecords}** farklı eşya tipi envanterde.`
+    ).addFields(
+        { name: '📦 Toplam Kasa (tüm)',        value: formatNumber(data.crateTotal),                   inline: true },
+        { name: '✨ Koleksiyon Adedi',          value: formatNumber(data.colTotal),                     inline: true },
+        { name: '💰 Koleksiyon Değeri (sat)',   value: `${formatNumber(data.colValue)} 🪙`,             inline: true },
+
+        { name: '🏪 Diğer Eşyalar (toplam)',   value: formatNumber(data.itemTotal),                    inline: true },
+        { name: '👑 Prestij Dağılımı',          value: prestigeLine.slice(0, 1024),                    inline: false },
+
+        { name: '📋 En Çok Sahip Olunan (top 10)', value: topItemLines.slice(0, 1024),                 inline: false },
+        { name: '🔮 En Nadir Koleksiyonlar',        value: rarestLines.slice(0, 1024),                 inline: false },
+        { name: '📦 En Çok Kasası Olan Kullanıcılar', value: topCrateLines.slice(0, 1024),             inline: false }
+    ).setFooter({ text: 'Envanter ekonomi raporu — read-only' });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleEkonomiAdminEtkisi(interaction) {
+    const sure = interaction.options.getInteger('sure') ?? 24;
+    const data = await getAdminImpactReport(sure);
+
+    const topTargetLines = data.topTargets.length > 0
+        ? data.topTargets.map(t => `<@${t.userId}> — ${t.count}x`).join('\n')
+        : 'Veri yok.';
+    const topActorLines = data.topActors.length > 0
+        ? data.topActors.map(a => `<@${a.actorId}> — ${a.count}x`).join('\n')
+        : 'Veri yok.';
+    const recentLines = data.recentLogs.length > 0
+        ? data.recentLogs.map(l =>
+              `**${l.action}** [${l.category}] — <@${l.actor_id}>` +
+              (l.target_user_id ? ` → <@${l.target_user_id}>` : '')
+          ).join('\n')
+        : 'Veri yok.';
+
+    const embed = createEmbed('admin', `🛡️ Admin Etkisi — Son ${data.hours} Saat`,
+        `Toplam **${data.total}** admin işlemi gerçekleştirildi.`
+    ).addFields(
+        { name: '💰 Para İşlemleri',   value: String(data.moneyCount),    inline: true },
+        { name: '📦 Envanter',          value: String(data.invCount),      inline: true },
+        { name: '🏆 Sezon',             value: String(data.seasonCount),   inline: true },
+
+        { name: '⏳ Bekleme',           value: String(data.cooldownCount), inline: true },
+        { name: '⚙️ Ayarlar',          value: String(data.settingsCount), inline: true },
+        { name: '➕ Admin Para +',      value: `${formatNumber(data.adminAdded)} 🪙`,   inline: true },
+
+        { name: '➖ Admin Para −',      value: `${formatNumber(data.adminRemoved)} 🪙`, inline: true },
+
+        { name: '🎯 En Çok Hedef Alınan',    value: topTargetLines.slice(0, 1024),  inline: false },
+        { name: '👮 En Aktif Admin',          value: topActorLines.slice(0, 1024),   inline: false },
+        { name: '🕐 Son 5 İşlem',             value: recentLines.slice(0, 1024),     inline: false }
+    ).setFooter({ text: `Admin etkisi raporu — son ${data.hours} saat — read-only` });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleEkonomiSupheli(interaction) {
+    const sure = interaction.options.getInteger('sure') ?? 24;
+    const data = await getSuspiciousEconomyReport(sure);
+
+    if (data.signals.length === 0) {
+        const embed = createEmbed('economy', `🔍 Şüpheli Ekonomi Sinyalleri — Son ${data.hours} Saat`,
+            '✅ Şüpheli sinyal tespit edilmedi. Ekonomi normal görünüyor.'
+        ).setFooter({ text: 'Şüpheli sinyal raporu — read-only' });
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    const TYPE_LABELS = {
+        high_wealth:  '💎 Yüksek Servet (50M+)',
+        bank_overflow:'🏦 Banka Taşması',
+        high_crates:  '📦 Çok Fazla Kasa (100+)',
+        overdue_rich: '⚠️ Zengin Ama Gecikmiş Kredi',
+        many_admin:   '👮 Yoğun Admin Müdahalesi',
+        high_prestige:'👑 Çok Prestij Eşyası (3+)',
+    };
+
+    // Sinyalleri tip bazında grupla, her grup için bir embed field yap
+    const groups = {};
+    for (const s of data.signals) {
+        if (!groups[s.type]) groups[s.type] = [];
+        groups[s.type].push(s);
+    }
+
+    const embed = createEmbed('admin', `🔍 Şüpheli Ekonomi Sinyalleri — Son ${data.hours} Saat`,
+        `Toplam **${data.signals.length}** şüpheli sinyal tespit edildi. Bu rapor otomatik ceza vermez; yalnızca bilgilendirme amaçlıdır.`
+    );
+
+    for (const [type, list] of Object.entries(groups)) {
+        const label = TYPE_LABELS[type] || type;
+        const lines = list
+            .map(s => `• <@${s.userId}>: ${s.detail}`)
+            .join('\n')
+            .slice(0, 1024);
+        embed.addFields({ name: label, value: lines || 'Veri yok.', inline: false });
+    }
+
+    embed.addFields({
+        name: '⚠️ Önemli Not',
+        value: 'Bu rapor otomatik ceza vermez. Şüpheli durumları kendin inceleyerek karar ver.',
+        inline: false
+    }).setFooter({ text: `Şüpheli sinyal raporu — son ${data.hours} saat — read-only` });
+
+    return interaction.editReply({ embeds: [embed] });
 }
