@@ -447,7 +447,7 @@ async function claimSeasonTaskReward(userId, taskCode, periodKey) {
     const expectedPeriodKey = _getSeasonTaskPeriodKey(task, season);
     if (periodKey !== expectedPeriodKey) return { success: false, reason: 'invalid_period' };
 
-    const txResult = await withTx(async (db) => {
+    return withTx(async (db) => {
         const res = await db.query(
             `SELECT * FROM economy_user_tasks
              WHERE user_id = $1 AND task_code = $2 AND period_key = $3
@@ -467,25 +467,21 @@ async function claimSeasonTaskReward(userId, taskCode, periodKey) {
             [rec.id]
         );
 
-        return { success: true, reward: task.reward };
-    });
-
-    if (!txResult.success) return txResult;
-
-    // Sezon puanı transaction dışında verilir — grantSeasonPoints kendi season_points_enabled kontrolünü yapar
-    let granted = 0, newPoints = 0, newLevel = 1;
-    if (task.reward.type === 'season_point' && task.reward.amount > 0) {
-        try {
-            const grantResult = await grantSeasonPoints(userId, task.reward.amount);
-            granted   = grantResult.granted   || 0;
+        // Sezon puanı claimed_at ile aynı transaction içinde verilir.
+        // grantSeasonPoints başarısız dönerse rollback tetiklenir ve claimed_at da geri alınır.
+        let granted = 0, newPoints = 0, newLevel = 1;
+        if (task.reward.type === 'season_point' && task.reward.amount > 0) {
+            const grantResult = await grantSeasonPoints(userId, task.reward.amount, db);
+            if (!grantResult || grantResult.granted <= 0) {
+                throw new Error(`season_task_reward_grant_failed:${grantResult?.reason || 'unknown'}`);
+            }
+            granted   = grantResult.granted;
             newPoints = grantResult.newPoints || 0;
             newLevel  = grantResult.newLevel  || 1;
-        } catch (err) {
-            console.error(`Sezon görevi puanı verilemedi [${taskCode}]:`, err?.message || err);
         }
-    }
 
-    return { success: true, reward: task.reward, granted, newPoints, newLevel };
+        return { success: true, reward: task.reward, granted, newPoints, newLevel };
+    });
 }
 
 // ==================[ BİRLEŞİK TETİKLEYİCİ ]==================
