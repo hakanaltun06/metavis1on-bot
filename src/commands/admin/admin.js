@@ -45,6 +45,14 @@ const {
     getAdminImpactReport,
     getSuspiciousEconomyReport,
 } = require('../../services/adminEconomyReportService');
+const {
+    getAdminSeasonReport,
+    createManualSeasonSnapshot,
+    previewSeasonEndRewards,
+    distributeSeasonEndRewards,
+    getSeasonDistributionStatus,
+    CRATE_DISPLAY: SEASON_END_CRATE_DISPLAY
+} = require('../../services/adminSeasonService');
 
 // ==================[ YARDIMCI ]==================
 
@@ -338,6 +346,47 @@ module.exports = {
                             { name: 'kullanici', type: 6, description: 'Hedef kullanıcı.',        required: true },
                             { name: 'miktar',    type: 4, description: 'Silinecek puan miktarı.', required: true, min_value: 1 },
                             { name: 'sebep',     type: 3, description: 'İşlem sebebi.',           required: true }
+                        ]
+                    },
+                    {
+                        name: 'rapor',
+                        description: 'Sezon yönetim raporunu görüntüler (katılımcı, puan, otomasyon durumu).',
+                        type: 1,
+                        options: [
+                            { name: 'sezon_id', type: 4, description: 'Sezon ID (belirtilmezse aktif/son sezon).', required: false, min_value: 1 }
+                        ]
+                    },
+                    {
+                        name: 'snapshot',
+                        description: 'Aktif veya belirtilen sezon için manuel snapshot alır.',
+                        type: 1,
+                        options: [
+                            { name: 'sezon_id', type: 4, description: 'Sezon ID (belirtilmezse aktif/son sezon).', required: false, min_value: 1 }
+                        ]
+                    },
+                    {
+                        name: 'odul-onizleme',
+                        description: 'Sezon sonu ödül planını önizler. Önce bunu çalıştır, sonra odul-dagit kullan.',
+                        type: 1,
+                        options: [
+                            { name: 'sezon_id', type: 4, description: 'Sezon ID.', required: true, min_value: 1 }
+                        ]
+                    },
+                    {
+                        name: 'odul-dagit',
+                        description: 'Tamamlanan sezonun sonu ödüllerini dağıtır. Onay metni zorunludur.',
+                        type: 1,
+                        options: [
+                            { name: 'sezon_id', type: 4, description: 'Sezon ID.',                                                          required: true,  min_value: 1 },
+                            { name: 'onay',     type: 3, description: 'Onay metni (odul-onizleme ekranında gösterilen SEZON-X-DAGIT formu).', required: true }
+                        ]
+                    },
+                    {
+                        name: 'dagitim-durumu',
+                        description: 'Sezon ödül dağıtım durumunu gösterir.',
+                        type: 1,
+                        options: [
+                            { name: 'sezon_id', type: 4, description: 'Sezon ID (belirtilmezse aktif/son sezon).', required: false, min_value: 1 }
                         ]
                     }
                 ]
@@ -701,9 +750,14 @@ module.exports = {
                 if (sub === 'incele') return await handleKrediIncele(interaction);
             }
             if (group === 'sezon') {
-                if (sub === 'incele')    return await handleSezonIncele(interaction);
-                if (sub === 'puan-ekle') return await handleSezonPuanEkle(interaction);
-                if (sub === 'puan-sil')  return await handleSezonPuanSil(interaction);
+                if (sub === 'incele')         return await handleSezonIncele(interaction);
+                if (sub === 'puan-ekle')      return await handleSezonPuanEkle(interaction);
+                if (sub === 'puan-sil')       return await handleSezonPuanSil(interaction);
+                if (sub === 'rapor')          return await handleSezonRapor(interaction);
+                if (sub === 'snapshot')       return await handleSezonSnapshot(interaction);
+                if (sub === 'odul-onizleme')  return await handleSezonOdulOnizleme(interaction);
+                if (sub === 'odul-dagit')     return await handleSezonOdulDagit(interaction);
+                if (sub === 'dagitim-durumu') return await handleSezonDagitimDurumu(interaction);
             }
             if (group === 'log') {
                 if (sub === 'listele')   return await handleLogListele(interaction);
@@ -2326,4 +2380,266 @@ async function handleSezonKanalSifirla(interaction) {
             { name: '➡️ Yeni Değer', value: 'Ayarlanmamış',                                                              inline: true }
         )]
     });
+}
+
+// ==================[ SEZON ADMIN — YARDIMCI ]==================
+
+function fmtSezonDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('tr-TR', {
+        day: 'numeric', month: 'long', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
+}
+
+function fmtSezonRemainingMs(ms) {
+    if (!ms || ms <= 0) return 'Bitti';
+    const days  = Math.floor(ms / 86400000);
+    const hours = Math.floor((ms % 86400000) / 3600000);
+    if (days > 0) return `${days}g ${hours}sa`;
+    const mins  = Math.floor((ms % 3600000) / 60000);
+    if (hours > 0) return `${hours}sa ${mins}d`;
+    return `${mins}d`;
+}
+
+function fmtEndRewardRow(entry) {
+    const itemsText = entry.items.map(it => {
+        const name = SEASON_END_CRATE_DISPLAY[it.itemCode] || it.itemCode;
+        return `${it.qty}× ${name}`;
+    }).join(' + ');
+    const coinText  = entry.coin > 0 ? `${formatNumber(entry.coin)} 🪙` : '';
+    const rewardStr = [coinText, itemsText].filter(Boolean).join(' · ');
+    const tag       = entry.alreadyClaimed ? ' _(dağıtıldı)_' : '';
+    return `**#${entry.rank}** <@${entry.userId}>${tag} → ${rewardStr}`;
+}
+
+// ==================[ /admin sezon rapor ]==================
+
+async function handleSezonRapor(interaction) {
+    const seasonId = interaction.options.getInteger('sezon_id') || null;
+    const report   = await getAdminSeasonReport(seasonId);
+
+    if (!report.ok) {
+        const msgs = {
+            no_season: 'Raporlanacak sezon bulunamadı.',
+            error:     'Rapor alınamadı. Biraz sonra tekrar dener misin?'
+        };
+        return editError(interaction, msgs[report.reason] || msgs.error);
+    }
+
+    const s  = report.season;
+    const st = report.stats;
+    const statusLabel = s.status === 'active'    ? '🟢 Aktif'
+                      : s.status === 'completed' ? '✅ Tamamlandı'
+                      : `📋 ${s.status}`;
+
+    const top3Lines = report.top10.slice(0, 3).map((u, i) =>
+        `**#${i + 1}** <@${u.user_id}> — ${formatNumber(Number(u.points))} puan · Sv.**${u.season_level}**`
+    ).join('\n') || 'Henüz katılımcı yok.';
+
+    const embed = createEmbed('admin', `📊 Sezon Raporu — ${s.name}`,
+        `Sezon ID: ${s.id} · Durum: ${statusLabel}`)
+        .addFields(
+            { name: '📅 Başlangıç',        value: fmtSezonDate(s.started_at),                                        inline: true },
+            { name: '📅 Bitiş',            value: fmtSezonDate(s.ends_at),                                           inline: true },
+            { name: '⏳ Kalan',             value: report.remainingMs > 0 ? fmtSezonRemainingMs(report.remainingMs) : 'Bitti', inline: true },
+
+            { name: '👥 Katılımcı',        value: String(st.participantCount),                                       inline: true },
+            { name: '🎯 Toplam Puan',      value: formatNumber(st.totalPoints),                                      inline: true },
+            { name: '📈 Ort. Puan',        value: formatNumber(st.avgPoints),                                        inline: true },
+
+            { name: '⭐ Lv.10+',           value: String(st.lv10plus),                                               inline: true },
+            { name: '⭐ Lv.20+',           value: String(st.lv20plus),                                               inline: true },
+            { name: '🏆 Lv.30 (Maks)',     value: String(st.lv30),                                                   inline: true },
+
+            { name: '🎖️ Level Ödül Claim', value: `${report.claimedLevelRewards.totalClaims} claim · ${report.claimedLevelRewards.claimedUsers} kullanıcı`, inline: true },
+            { name: '📸 Snapshot',         value: String(report.snapshotCount),                                      inline: true },
+            { name: '✅ Sonu Ödül Dağ.',   value: report.distributedCount > 0 ? `${report.distributedCount} kullanıcı` : '⏳ Yapılmadı', inline: true },
+
+            { name: '🏆 Top 3',            value: top3Lines,                                                         inline: false }
+        );
+
+    const autoState = report.automationState;
+    if (autoState) {
+        const flags = [
+            autoState.notified_7d  ? '7g ✅' : '7g ⬜',
+            autoState.notified_3d  ? '3g ✅' : '3g ⬜',
+            autoState.notified_24h ? '24s ✅' : '24s ⬜',
+            autoState.notified_1h  ? '1s ✅' : '1s ⬜',
+            autoState.notified_end ? 'bitiş ✅' : 'bitiş ⬜'
+        ].join(' · ');
+        embed.addFields({ name: '🤖 Otomasyon Uyarıları', value: flags, inline: false });
+    }
+
+    embed.setFooter({ text: 'Sezon yönetim raporu — read-only' });
+    return interaction.editReply({ embeds: [embed] });
+}
+
+// ==================[ /admin sezon snapshot ]==================
+
+async function handleSezonSnapshot(interaction) {
+    const seasonId = interaction.options.getInteger('sezon_id') || null;
+    const result   = await createManualSeasonSnapshot(seasonId, interaction.user.id);
+
+    if (!result.ok) {
+        const msgs = {
+            no_season:       'Snapshot alınacak sezon bulunamadı.',
+            snapshot_failed: 'Snapshot alınamadı. Biraz sonra tekrar dener misin?',
+            error:           'Snapshot alınamadı. Biraz sonra tekrar dener misin?'
+        };
+        return editError(interaction, msgs[result.reason] || msgs.error);
+    }
+
+    const s    = result.season;
+    const snap = result.snapshot;
+    return interaction.editReply({
+        embeds: [createEmbed('admin', '📸 Manuel Snapshot Alındı',
+            `**${s.name}** için \`manual\` snapshot kaydedildi.`
+        ).addFields(
+            { name: '🆔 Snapshot ID', value: String(snap.id),                              inline: true },
+            { name: '📅 Tarih',       value: fmtSezonDate(snap.created_at),                inline: true },
+            { name: '👥 Katılımcı',   value: String(result.summary.participantCount),      inline: true },
+            { name: '🎯 Toplam Puan', value: formatNumber(result.summary.totalPoints),     inline: true }
+        ).setFooter({ text: `Sezon ID: ${s.id} · Tip: manual · Admin log kaydedildi` })]
+    });
+}
+
+// ==================[ /admin sezon odul-onizleme ]==================
+
+async function handleSezonOdulOnizleme(interaction) {
+    const seasonId = interaction.options.getInteger('sezon_id');
+    const preview  = await previewSeasonEndRewards(seasonId);
+
+    if (!preview.ok) {
+        const msgs = {
+            season_not_found: 'Belirtilen sezon bulunamadı.',
+            error:            'Önizleme alınamadı. Biraz sonra tekrar dener misin?'
+        };
+        return editError(interaction, msgs[preview.reason] || msgs.error);
+    }
+
+    const s = preview.season;
+    const t = preview.totals;
+    const statusLabel = s.status === 'completed' ? '✅ Tamamlandı'
+                      : s.status === 'active'    ? '🟡 Aktif (henüz tamamlanmadı)'
+                      : s.status;
+
+    const top10Lines = preview.plan.slice(0, 10).map(e => fmtEndRewardRow(e)).join('\n') || '—';
+
+    const embed = createEmbed('premium', `🎖️ Sezon Sonu Ödül Önizleme — ${s.name}`,
+        preview.canDistribute
+            ? 'Dağıtım hazır. Aşağıdaki onay metnini `odul-dagit` komutuna gir.'
+            : '⚠️ Dağıtım şu an yapılamaz.'
+    ).addFields(
+        { name: '🆔 Sezon ID',         value: String(s.id),                        inline: true },
+        { name: '📋 Durum',            value: statusLabel,                          inline: true },
+        { name: '👥 Ödül Alacak',      value: String(t.eligibleCount),              inline: true },
+        { name: '💰 Toplam Coin',      value: `${formatNumber(t.totalCoin)} 🪙`,    inline: true },
+        { name: '📦 Toplam Kasa',      value: String(t.totalCrates),                inline: true },
+        { name: '✅ Zaten Dağıtıldı',  value: String(t.alreadyClaimedCount),        inline: true },
+        { name: '🏆 Top 10 Ödül Planı', value: top10Lines.slice(0, 1024),           inline: false }
+    );
+
+    if (preview.warnings.length > 0) {
+        embed.addFields({ name: '⚠️ Uyarılar', value: preview.warnings.join('\n').slice(0, 1024), inline: false });
+    }
+    if (preview.canDistribute) {
+        embed.addFields({
+            name:  '🔑 Dağıtım için',
+            value: `\`/admin sezon odul-dagit sezon_id:${s.id} onay:${preview.confirmationPhrase}\``,
+            inline: false
+        });
+    }
+
+    embed.setFooter({ text: 'Önizleme — Dağıtım için /admin sezon odul-dagit kullan' });
+    return interaction.editReply({ embeds: [embed] });
+}
+
+// ==================[ /admin sezon odul-dagit ]==================
+
+async function handleSezonOdulDagit(interaction) {
+    const seasonId = interaction.options.getInteger('sezon_id');
+    const onay     = (interaction.options.getString('onay') || '').trim();
+
+    const result = await distributeSeasonEndRewards(seasonId, interaction.user.id, onay);
+
+    if (!result.ok) {
+        const msgs = {
+            invalid_confirmation: `Onay metni hatalı. Önizleme ekranındaki metni birebir yaz.\nBeklenen format: \`SEZON-${seasonId}-DAGIT\``,
+            season_not_found:     'Belirtilen sezon bulunamadı.',
+            season_not_completed: 'Ödül dağıtımı yalnızca tamamlanmış sezonlar için yapılabilir.',
+            nothing_to_distribute:'Dağıtılacak yeni ödül yok.',
+            already_distributed:  'Bu sezonun ödülleri zaten dağıtılmış görünüyor.',
+            distribution_failed:  'Ödül dağıtımı sırasında sorun oluştu. Hiçbir kısmi dağıtım bırakılmadı.',
+            invalid_params:       'Geçersiz parametre. Sezon ID ve onay metni zorunludur.',
+            error:                'İşlem sırasında beklenmeyen bir sorun oluştu.'
+        };
+        return editError(interaction, msgs[result.reason] || msgs.error);
+    }
+
+    const s         = result.season;
+    const topLines  = result.rows.slice(0, 10).map(e => fmtEndRewardRow(e)).join('\n') || '—';
+    const moreCount = result.distributedUserCount > 10 ? ` (toplam ${result.distributedUserCount})` : '';
+
+    const embed = createEmbed('admin', '✅ Sezon Sonu Ödülleri Dağıtıldı',
+        `**${s.name}** sezonu için ödüller başarıyla dağıtıldı.`
+    ).addFields(
+        { name: '👥 Dağıtılan',     value: String(result.distributedUserCount),                 inline: true },
+        { name: '⏭️ Atlandı',       value: String(result.skippedAlreadyClaimed),                inline: true },
+        { name: '💰 Toplam Coin',   value: `${formatNumber(result.totalCoin)} 🪙`,               inline: true },
+        { name: '📦 Toplam Kasa',   value: String(result.totalCrates),                           inline: true },
+        { name: `🏆 Dağıtılan Kullanıcılar${moreCount}`,
+          value: topLines.slice(0, 1024),                                                        inline: false }
+    );
+    if (result.snapshotId) {
+        embed.addFields({ name: '📸 Snapshot', value: `ID: ${result.snapshotId}`, inline: true });
+    }
+    embed.setFooter({ text: `Sezon ID: ${s.id} · Admin log kaydedildi` });
+    return interaction.editReply({ embeds: [embed] });
+}
+
+// ==================[ /admin sezon dagitim-durumu ]==================
+
+async function handleSezonDagitimDurumu(interaction) {
+    const seasonId = interaction.options.getInteger('sezon_id') || null;
+    const status   = await getSeasonDistributionStatus(seasonId);
+
+    if (!status.ok) {
+        const msgs = {
+            no_season: 'Sezon bulunamadı.',
+            error:     'Dağıtım durumu alınamadı. Biraz sonra tekrar dener misin?'
+        };
+        return editError(interaction, msgs[status.reason] || msgs.error);
+    }
+
+    const s = status.season;
+    const statusLabel = s.status === 'active'    ? '🟢 Aktif'
+                      : s.status === 'completed' ? '✅ Tamamlandı'
+                      : s.status;
+
+    const distLabel = status.isFullyDistributed
+        ? '✅ Tüm ödüller dağıtıldı'
+        : status.claimed > 0
+            ? `⚠️ Kısmi (${status.claimed} dağıtıldı, ${status.eligible} bekliyor)`
+            : '⏳ Henüz dağıtılmadı';
+
+    const embed = createEmbed('admin', `📋 Dağıtım Durumu — ${s.name}`,
+        `Sezon ID: ${s.id} · Durum: ${statusLabel}`)
+        .addFields(
+            { name: '📊 Toplam Katılımcı', value: String(status.total),   inline: true },
+            { name: '✅ Dağıtılan',        value: String(status.claimed), inline: true },
+            { name: '⏳ Bekleyen',         value: String(status.eligible), inline: true },
+            { name: '📋 Dağıtım Durumu',  value: distLabel,              inline: false }
+        );
+
+    if (!status.isFullyDistributed && s.status === 'completed' && status.eligible > 0) {
+        embed.addFields({
+            name:  '🔑 Dağıtım için',
+            value: `**1.** \`/admin sezon odul-onizleme sezon_id:${s.id}\`\n**2.** \`/admin sezon odul-dagit sezon_id:${s.id} onay:${status.confirmationPhrase}\``,
+            inline: false
+        });
+    }
+
+    embed.setFooter({ text: 'Dağıtım durumu — read-only' });
+    return interaction.editReply({ embeds: [embed] });
 }

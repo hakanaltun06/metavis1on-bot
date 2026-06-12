@@ -9,7 +9,6 @@ const {
     getSeasonUserCount,
     getSeasonTopUser,
     getLatestCompletedSeason,
-    distributeSeasonRewards,
     isSeasonRewardsDistributed
 } = require('../../services/seasonService');
 
@@ -213,63 +212,15 @@ async function handleBitir(interaction) {
     return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
-function formatItemName(itemId) {
-    const names = {
-        prestij_kasa:  'Prestij Kasa',
-        efsanevi_kasa: 'Efsanevi Kasa',
-        neon_kasa:     'Neon Kasa',
-        epik_kasa:     'Epik Kasa',
-        nexus_kasa:    'Nexus Kasa',
-        nadir_kasa:    'Nadir Kasa',
-        basit_kasa:    'Basit Kasa'
-    };
-    return names[itemId] || itemId;
-}
-
 async function handleDagit(interaction) {
-    const season = await getLatestCompletedSeason();
-
-    if (!season) {
-        return interaction.reply({
-            embeds: [createEmbed('info', '🎖️ Ödül Dağıtımı', 'Tamamlanmış sezon bulunamadı.')],
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const result = await distributeSeasonRewards(season.id);
-
-    if (!result.ok && result.reason === 'already_distributed') {
-        return interaction.reply({
-            embeds: [createEmbed('warn', '⚠️ Zaten Dağıtıldı', `**${season.name}** için ödüller daha önce dağıtıldı.`)],
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    if (!result.ok && result.reason === 'no_candidates') {
-        return interaction.reply({
-            embeds: [createEmbed('info', '🎖️ Ödül Dağıtımı', `**${season.name}** için ödül alan kullanıcı bulunamadı.`)],
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    if (!result.ok) {
-        return interaction.reply({
-            embeds: [createEmbed('error', '⚠️ Bir Aksilik Oldu', 'Ödüller dağıtılamadı. Biraz sonra tekrar dener misin?')],
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const lines = result.rewards.slice(0, 15).map(entry => {
-        const rewardStr = entry.rewards.map(r => `${r.quantity}× ${formatItemName(r.itemId)}`).join(', ');
-        return `<@${entry.userId}> — ${entry.tier} → ${rewardStr}`;
+    return interaction.reply({
+        embeds: [createEmbed('info', '🎖️ Ödül Dağıtımı — Taşındı',
+            'Sezon sonu ödül dağıtımı artık güvenli admin komutlarına taşındı.\n\n' +
+            '**Adımlar:**\n' +
+            '**1.** `/admin sezon odul-onizleme sezon_id:<id>` — Ödül planını ve onay metnini gör\n' +
+            '**2.** `/admin sezon odul-dagit sezon_id:<id> onay:<SEZON-X-DAGIT>` — Dağıtımı başlat\n\n' +
+            'Sezon ID\'sini öğrenmek için `/admin sezon rapor` kullanabilirsin.'
+        ).setFooter({ text: 'Bu komut artık devre dışı — yeni güvenli akışı kullan' })],
+        flags: MessageFlags.Ephemeral
     });
-    if (result.distributedCount > 15) {
-        lines.push(`... ve ${result.distributedCount - 15} kişi daha`);
-    }
-
-    const embed = createEmbed('success', '🎖️ Ödüller Dağıtıldı', `**${season.name}** için ödüller başarıyla verildi.`)
-        .addFields({ name: `🏅 ${result.distributedCount} Kullanıcı`, value: lines.join('\n') || '—', inline: false })
-        .setFooter({ text: `Sezon ID: ${season.id}` });
-
-    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
