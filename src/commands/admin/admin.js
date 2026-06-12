@@ -34,7 +34,7 @@ const {
 } = require('../../services/adminControlService');
 const { getLoanRiskText } = require('../../services/loanService');
 const {
-    getNumberSetting, getBooleanSetting, listSettings, setSetting, resetSetting
+    getSetting, getNumberSetting, getBooleanSetting, listSettings, setSetting, resetSetting
 } = require('../../services/settingsService');
 const {
     getEconomyOverview,
@@ -623,6 +623,53 @@ module.exports = {
                         ]
                     }
                 ]
+            },
+            {
+                name: 'sezon-kanal',
+                description: 'Sezon uyarı ve rapor kanallarını yönetir.',
+                type: 2,
+                options: [
+                    {
+                        name: 'goster',
+                        description: 'Mevcut sezon kanal ayarlarını ve otomasyon durumunu gösterir.',
+                        type: 1,
+                        options: []
+                    },
+                    {
+                        name: 'ayarla',
+                        description: 'Seçilen sezon kanal tipini bir Discord kanalına ayarlar.',
+                        type: 1,
+                        options: [
+                            {
+                                name: 'tip', type: 3, description: 'Ayarlanacak kanal tipi.', required: true,
+                                choices: [
+                                    { name: 'Uyarı Kanalı (oyuncu duyuruları)', value: 'uyari' },
+                                    { name: 'Admin Kanalı (otomasyon raporları)', value: 'admin' },
+                                    { name: 'Rapor Kanalı (24s günlük rapor)',   value: 'rapor' }
+                                ]
+                            },
+                            {
+                                name: 'kanal', type: 7, description: 'Mesajların gönderileceği kanal.', required: true,
+                                channel_types: [0, 5]
+                            }
+                        ]
+                    },
+                    {
+                        name: 'sifirla',
+                        description: 'Seçilen sezon kanal ayarını kaldırır (boş bırakır).',
+                        type: 1,
+                        options: [
+                            {
+                                name: 'tip', type: 3, description: 'Sıfırlanacak kanal tipi.', required: true,
+                                choices: [
+                                    { name: 'Uyarı Kanalı', value: 'uyari' },
+                                    { name: 'Admin Kanalı', value: 'admin' },
+                                    { name: 'Rapor Kanalı', value: 'rapor' }
+                                ]
+                            }
+                        ]
+                    }
+                ]
             }
         ]
     },
@@ -697,6 +744,11 @@ module.exports = {
                 if (sub === 'ac')                 return await handleSistemAc(interaction);
                 if (sub === 'kapat')              return await handleSistemKapat(interaction);
                 if (sub === 'varsayilana-dondur') return await handleSistemVarsayilanaDondur(interaction);
+            }
+            if (group === 'sezon-kanal') {
+                if (sub === 'goster')  return await handleSezonKanalGoster(interaction);
+                if (sub === 'ayarla')  return await handleSezonKanalAyarla(interaction);
+                if (sub === 'sifirla') return await handleSezonKanalSifirla(interaction);
             }
         } catch (err) {
             console.error(`/admin ${group} ${sub} hatası:`, err?.message ?? err);
@@ -2189,6 +2241,89 @@ async function handleSistemVarsayilanaDondur(interaction) {
             { name: '⬅️ Eski Değer', value: oldValue,              inline: true },
             { name: '➡️ Yeni Değer', value: '🟢 Açık (varsayılan)', inline: true },
             { name: '📝 Sebep',       value: sebep,                  inline: false }
+        )]
+    });
+}
+
+// ==================[ SEZON KANAL AYARLARI ]==================
+
+const SEZON_KANAL_TIP_MAP = {
+    uyari: { key: 'season.warning_channel_id', label: 'Uyarı Kanalı' },
+    admin: { key: 'season.admin_channel_id',   label: 'Admin Kanalı' },
+    rapor: { key: 'season.report_channel_id',  label: 'Rapor Kanalı' }
+};
+
+async function handleSezonKanalGoster(interaction) {
+    const [warningId, adminId, reportId, autoEnabled, dailyEnabled] = await Promise.all([
+        getSetting('season.warning_channel_id', ''),
+        getSetting('season.admin_channel_id', ''),
+        getSetting('season.report_channel_id', ''),
+        getBooleanSetting('season.automation_enabled', true),
+        getBooleanSetting('season.daily_report_enabled', true)
+    ]);
+
+    const fmtCh = id => (id && id.trim()) ? `<#${id.trim()}>` : 'Ayarlanmamış';
+
+    const embed = createEmbed('admin', '📡 Sezon Kanal Ayarları',
+        'Sezon otomasyon mesajlarının gönderileceği kanallar.')
+        .addFields(
+            { name: '📢 Uyarı Kanalı',  value: fmtCh(warningId),                              inline: true },
+            { name: '🔧 Admin Kanalı',  value: fmtCh(adminId),                                inline: true },
+            { name: '📊 Rapor Kanalı',  value: fmtCh(reportId),                               inline: true },
+            { name: '⚙️ Otomasyon',     value: autoEnabled   ? '✅ Açık' : '❌ Kapalı',       inline: true },
+            { name: '📅 Günlük Rapor',  value: dailyEnabled  ? '✅ Açık' : '❌ Kapalı',       inline: true }
+        )
+        .setFooter({ text: 'Kanal ayarlamak için /admin sezon-kanal ayarla kullan.' });
+
+    return interaction.editReply({ embeds: [embed] });
+}
+
+async function handleSezonKanalAyarla(interaction) {
+    const tip   = interaction.options.getString('tip');
+    const kanal = interaction.options.getChannel('kanal');
+
+    const tipInfo = SEZON_KANAL_TIP_MAP[tip];
+    if (!tipInfo) return editError(interaction, 'Geçersiz kanal tipi.');
+
+    const channelId   = kanal.id;
+    const currentId   = await getSetting(tipInfo.key, '');
+
+    try {
+        await setSetting(tipInfo.key, channelId, interaction.user.id, `${tipInfo.label} ayarlandı`);
+    } catch (err) {
+        return editError(interaction, err.message || 'Kanal ayarlanamadı. Biraz sonra tekrar dener misin?');
+    }
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', `✅ ${tipInfo.label} Ayarlandı`,
+            `${tipInfo.label} <#${channelId}> olarak ayarlandı.`
+        ).addFields(
+            { name: '⬅️ Eski Değer', value: (currentId && currentId.trim()) ? `<#${currentId.trim()}>` : 'Ayarlanmamış', inline: true },
+            { name: '➡️ Yeni Değer', value: `<#${channelId}>`,                                                            inline: true }
+        )]
+    });
+}
+
+async function handleSezonKanalSifirla(interaction) {
+    const tip = interaction.options.getString('tip');
+
+    const tipInfo = SEZON_KANAL_TIP_MAP[tip];
+    if (!tipInfo) return editError(interaction, 'Geçersiz kanal tipi.');
+
+    const currentId = await getSetting(tipInfo.key, '');
+
+    try {
+        await resetSetting(tipInfo.key, interaction.user.id, `${tipInfo.label} sıfırlandı`);
+    } catch (err) {
+        return editError(interaction, err.message || 'Kanal sıfırlanamadı. Biraz sonra tekrar dener misin?');
+    }
+
+    return interaction.editReply({
+        embeds: [createEmbed('admin', `✅ ${tipInfo.label} Sıfırlandı`,
+            `${tipInfo.label} ayarı kaldırıldı. Bu kanal için artık mesaj gönderilmeyecek.`
+        ).addFields(
+            { name: '⬅️ Eski Değer', value: (currentId && currentId.trim()) ? `<#${currentId.trim()}>` : 'Zaten boştu', inline: true },
+            { name: '➡️ Yeni Değer', value: 'Ayarlanmamış',                                                              inline: true }
         )]
     });
 }

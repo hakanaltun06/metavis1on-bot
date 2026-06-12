@@ -62,6 +62,12 @@ process.on('uncaughtException', (err) => {
         } catch (err) {
             console.error('Komut yükleme hatası:', err && err.message ? err.message : 'Bilinmeyen hata');
         }
+        try {
+            const { startSeasonAutomation } = require('./src/services/seasonAutomationService');
+            startSeasonAutomation(client);
+        } catch (err) {
+            console.error('Sezon otomasyon başlatılamadı:', err && err.message ? err.message : 'Bilinmeyen hata');
+        }
     });
 
     try {

@@ -359,6 +359,58 @@ const DEFAULT_SETTINGS = [
         defaultValue: '1',
         isSensitive: false
     },
+
+    // ==================[ SEZON OTOMASYON ]==================
+    {
+        key: 'season.automation_enabled',
+        value: 'true',
+        valueType: 'boolean',
+        category: 'season',
+        description: 'Sezon otomasyon sistemini açar/kapatır (bitiş uyarıları, otomatik tamamlama).',
+        minValue: null, maxValue: null,
+        defaultValue: 'true',
+        isSensitive: false
+    },
+    {
+        key: 'season.daily_report_enabled',
+        value: 'true',
+        valueType: 'boolean',
+        category: 'season',
+        description: '24 saatlik sezon raporu gönderimini açar/kapatır.',
+        minValue: null, maxValue: null,
+        defaultValue: 'true',
+        isSensitive: false
+    },
+    {
+        key: 'season.warning_channel_id',
+        value: '',
+        valueType: 'text',
+        category: 'season',
+        description: 'Sezon bitiş uyarılarının gönderileceği kanal ID (genel oyuncu duyuruları).',
+        minValue: null, maxValue: null,
+        defaultValue: '',
+        isSensitive: false
+    },
+    {
+        key: 'season.admin_channel_id',
+        value: '',
+        valueType: 'text',
+        category: 'season',
+        description: 'Sezon admin raporlarının gönderileceği kanal ID (otomasyon, snapshot, ödül uyarısı).',
+        minValue: null, maxValue: null,
+        defaultValue: '',
+        isSensitive: false
+    },
+    {
+        key: 'season.report_channel_id',
+        value: '',
+        valueType: 'text',
+        category: 'season',
+        description: '24 saatlik sezon raporlarının gönderileceği kanal ID.',
+        minValue: null, maxValue: null,
+        defaultValue: '',
+        isSensitive: false
+    },
 ];
 
 module.exports = { DEFAULT_SETTINGS };
